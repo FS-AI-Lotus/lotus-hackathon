@@ -2,12 +2,19 @@
   "name": "lotus-hackathon",
   "version": "1.0.0",
   "scripts": {
+    "start": "node test-server.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "progress": "node scripts/progress-tracker.js",
     "progress:status": "node scripts/progress-tracker.js status",
-    "progress:next": "node scripts/progress-tracker.js next"
+    "progress:next": "node scripts/progress-tracker.js next",
+    "monitoring:start": "docker compose -f docker-compose.monitoring.yml up -d",
+    "monitoring:stop": "docker compose -f docker-compose.monitoring.yml down",
+    "monitoring:status": "docker compose -f docker-compose.monitoring.yml ps",
+    "monitoring:logs": "docker compose -f docker-compose.monitoring.yml logs -f",
+    "test-server": "node test-server.js",
+    "test-traffic": "node -e \"console.log('Use: ./test-traffic.sh (Linux/Mac) or .\\test-traffic.ps1 (Windows)')\""
   },
   "dependencies": {
     "express": "^5.1.0",

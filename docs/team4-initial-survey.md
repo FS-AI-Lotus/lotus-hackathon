@@ -10,19 +10,23 @@
 
 ### Coordinator Service Location
 
-**Status**: ❌ **Not Found**
+**Status**: ✅ **Test Coordinator Available**
 
-The Coordinator service (Node/Express backend) is **not currently present** in this repository. 
+A **test Coordinator service** has been created at `test-server.js` for testing and demonstration purposes.
 
-**Possible locations to check:**
-- May be in a different branch (e.g., `team3`, `main`, or `coordinator`)
-- May be added by Team 3 in a future commit
-- May be in a separate repository
+**Test Coordinator Features:**
+- ✅ Express app with monitoring middleware integrated
+- ✅ `/health` endpoint
+- ✅ `/metrics` endpoint (Prometheus format)
+- ✅ `/register` endpoint (service registration with metrics tracking)
+- ✅ `/route` endpoint (data routing with metrics tracking)
+- ✅ `/services` endpoint (list registered services)
+- ✅ Exports app for testing (`module.exports = app`)
 
 **Action Items:**
-- Monitor repository for Coordinator service addition
-- Once Coordinator is added, update this document with the actual path
-- Expected structure: Coordinator should export Express app from a module (e.g., `app.js` or `server.js`) for testing
+- ✅ Test coordinator is ready for monitoring verification
+- ⏳ Production Coordinator from Team 3 will be integrated when available
+- Expected structure: Production Coordinator should export Express app from a module (e.g., `app.js` or `server.js`) for testing
 
 ---
 
@@ -39,9 +43,10 @@ The Coordinator service (Node/Express backend) is **not currently present** in t
 - ❌ No existing input validation middleware found
 
 ### Endpoints
-- ❌ No `/health` endpoint found
-- ❌ No `/register` endpoint found
-- ❌ No `/route` endpoint found
+- ✅ `/health` endpoint (test coordinator)
+- ✅ `/register` endpoint (test coordinator)
+- ✅ `/route` endpoint (test coordinator)
+- ✅ `/metrics` endpoint (test coordinator)
 
 ### Test Infrastructure
 - ❌ No existing test framework found

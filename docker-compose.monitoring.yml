@@ -61,6 +61,31 @@ services:
       timeout: 5s
       retries: 3
 
+  Optional: Grafana Alloy for forwarding metrics to Grafana Cloud
+  Uncomment to enable Alloy and forward metrics to Grafana Cloud
+  alloy:
+    image: grafana/alloy:latest
+    container_name: team4-alloy
+    ports:
+      - "12345:12345"  # Alloy UI
+    volumes:
+      - ./infra/monitoring/alloy.config:/etc/alloy/config.alloy:ro
+    environment:
+      - COORDINATOR_HOST=${COORDINATOR_HOST:-host.docker.internal:3000}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - /etc/alloy/config.alloy
+    networks:
+      - team4-monitoring
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:12345/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
 volumes:
   prometheus-data:
     driver: local

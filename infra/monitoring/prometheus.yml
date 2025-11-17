@@ -63,9 +63,13 @@ scrape_configs:
   #         service: 'microservices'
   #         environment: '${ENVIRONMENT:-development}'
 
-# Optional: Remote write configuration for long-term storage
+# Optional: Remote write configuration for Grafana Cloud
+# Uncomment to forward metrics directly to Grafana Cloud (alternative to Alloy)
 # remote_write:
-#   - url: 'https://prometheus-remote-write.example.com/api/v1/write'
+#   - url: 'https://prometheus-prod-53-prod-me-central-1.grafana.net/api/prom/push'
+#     basic_auth:
+#       username: '2805139'
+#       password: '${GRAFANA_CLOUD_TOKEN}'  # Replace with your actual Grafana Cloud token
 #     queue_config:
 #       max_samples_per_send: 1000
 #       max_shards: 200

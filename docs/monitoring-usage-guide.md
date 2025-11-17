@@ -27,7 +27,7 @@ curl http://localhost:3000/metrics
 3. Verify: Coordinator target shows `UP` (green)
 
 ### Check Grafana Dashboard
-1. Open: http://localhost:3001 (admin/admin)
+1. Open: http://localhost:4000 (admin/admin) - if running locally
 2. Import dashboard: `infra/monitoring/grafana-dashboard-coordinator.json`
 3. Verify: Panels show data (not "No data")
 
@@ -56,8 +56,8 @@ The monitoring stack consists of:
 ### Prerequisites
 
 - Coordinator service running (with `/metrics` endpoint)
-- Docker and Docker Compose (for local setup)
-- Or access to deployed Prometheus/Grafana instances
+- Prometheus installed locally (or use optional Docker setup)
+- Grafana installed locally (optional, for visualization)
 
 ### Step 1: Verify Coordinator Metrics Endpoint
 
@@ -187,75 +187,40 @@ coordinator_service_registrations_total{status="success"} 15
 
 ## 🔧 Setting Up Prometheus
 
-### Option 1: Docker Compose (Recommended for Local)
+### Option 1: Run Prometheus Locally (Recommended)
 
-Create a `docker-compose.yml`:
+1. **Install Prometheus** on your machine:
+   - Download from: https://prometheus.io/download/
+   - Or use package manager: `brew install prometheus` (Mac) / `choco install prometheus` (Windows)
 
-```yaml
-version: '3.8'
-
-services:
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./infra/monitoring/alerts.yml:/etc/prometheus/alerts.yml
-      - prometheus-data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-    environment:
-      - COORDINATOR_HOST=host.docker.internal:3000
-    networks:
-      - monitoring
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    ports:
-      - "3001:3000"
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./infra/monitoring/grafana-dashboard-coordinator.json:/etc/grafana/provisioning/dashboards/coordinator.json
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
-    networks:
-      - monitoring
-    depends_on:
-      - prometheus
-
-volumes:
-  prometheus-data:
-  grafana-data:
-
-networks:
-  monitoring:
-    driver: bridge
-```
-
-**Start the stack:**
-```bash
-docker-compose up -d
-```
-
-### Option 2: Standalone Prometheus
-
-1. **Update `prometheus.yml` with Coordinator host:**
+2. **Update `prometheus.yml`** - target is already set to `localhost:3000`:
    ```yaml
    scrape_configs:
      - job_name: 'coordinator'
        static_configs:
-         - targets: ['localhost:3000']  # Update with your Coordinator host:port
+         - targets: ['localhost:3000']  # Already configured
    ```
 
-2. **Start Prometheus:**
+3. **Start Prometheus:**
    ```bash
    prometheus --config.file=./infra/monitoring/prometheus.yml
    ```
+
+4. **For Railway Production**, update the target:
+   ```yaml
+   targets:
+     - 'your-app.railway.app:443'  # Your Railway URL
+   ```
+
+### Option 2: Use Docker (Optional)
+
+If you prefer Docker for local development:
+
+```bash
+npm run monitoring:docker:start
+```
+
+This uses the optional `docker-compose.monitoring.yml` file.
 
 ---
 

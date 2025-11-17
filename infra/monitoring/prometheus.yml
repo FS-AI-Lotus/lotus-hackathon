@@ -31,23 +31,23 @@ scrape_configs:
     scrape_interval: 15s
     scrape_timeout: 10s
     metrics_path: '/metrics'
+    scheme: 'https'  # Use https for Railway, http for localhost
+    tls_config:
+      insecure_skip_verify: false  # Railway uses valid SSL certificates - verify them
     static_configs:
       - targets:
-          # TODO: Replace with actual Coordinator hostname:port
-          # This will be injected by Terraform/CI or set via env vars
-          - '${COORDINATOR_HOST:-localhost:3000}'
+          # Coordinator service endpoint
+          # 
+          # LOCAL DEVELOPMENT: Use localhost:3000
+          # PRODUCTION (RAILWAY): Use your Railway URL (see RAILWAY-URL.config)
+          # 
+          # Current Railway URL: ms8-learning-analytics-production.up.railway.app:443
+          # To change: Update the URL below and in RAILWAY-URL.config
+          - 'ms8-learning-analytics-production.up.railway.app:443'  # Railway Production
+          # - 'localhost:3000'  # Uncomment for local development
         labels:
           service: 'coordinator'
-          environment: '${ENVIRONMENT:-development}'
-    
-    # Optional: Relabeling for additional metadata
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: __param_target
-      - source_labels: [__param_target]
-        target_label: instance
-      - target_label: __address__
-        replacement: '${COORDINATOR_HOST:-localhost:3000}'
+          environment: 'production'  # Change to 'development' for local
 
   # Placeholder for future microservices
   # Uncomment and configure when microservices are ready

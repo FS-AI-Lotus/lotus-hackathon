@@ -1,174 +1,139 @@
-# 📊 Team 4 Monitoring Setup - Quick Start
+# 📊 Team 4 Monitoring Setup
 
-This is a **standalone monitoring setup** that won't interfere with other teams' deliverables.
+## 🎯 Overview
 
-## 🚀 Quick Start
+This monitoring setup uses **localhost for local development** and can be easily configured for **Railway production deployment**.
 
-### Prerequisites
-- Docker and Docker Compose installed
-- Node.js (for test server)
+**Key Files:**
+- `infra/monitoring/prometheus.yml` - Prometheus configuration (update target URL for Railway)
+- `infra/monitoring/alerts.yml` - Alert rules
+- `infra/monitoring/grafana-dashboard-coordinator.json` - Grafana dashboard
+- `infra/monitoring/grafana-datasource.yml` - Grafana data source config
 
-### 1. Start the Monitoring Stack
+## 🚀 Local Development Setup
 
-**Windows (PowerShell):**
-```powershell
-.\scripts\monitoring-setup.ps1 start
-```
+### Option 1: Run Prometheus & Grafana Locally (Recommended)
 
-**Linux/Mac/Git Bash:**
-```bash
-chmod +x scripts/monitoring-setup.sh
-./scripts/monitoring-setup.sh start
-```
+1. **Install Prometheus & Grafana** on your machine
+2. **Update `prometheus.yml`** - target is already set to `localhost:3000`
+3. **Start your Coordinator service** on port 3000
+4. **Start Prometheus**: `prometheus --config.file=./infra/monitoring/prometheus.yml`
+5. **Start Grafana** and import the dashboard
 
-This starts:
-- **Prometheus** on http://localhost:9090
-- **Grafana** on http://localhost:4000 (admin/admin)
+### Option 2: Use Docker (Optional)
 
-### 2. Start Test Server (Optional)
-
-If you don't have the Coordinator service running:
+If you prefer Docker for local development:
 
 ```bash
-node test-server.js
+npm run monitoring:docker:start
 ```
 
-This starts a test server on http://localhost:3000 with `/health` and `/metrics` endpoints.
+This uses `docker-compose.monitoring.yml` (optional setup).
 
-### 3. Verify Everything Works
+## 🚂 Railway Production Setup
 
-1. **Check Prometheus**: http://localhost:9090
-   - Go to **Status → Targets**
-   - Coordinator should show as `UP` (green)
+### Current Configuration
 
-2. **Check Grafana**: http://localhost:4000
-   - Login: `admin` / `admin`
-   - Dashboard should auto-import
-   - Panels should show data
+Your Railway URL is already configured:
+- **URL**: `ms8-learning-analytics-production.up.railway.app:443`
+- **File**: `infra/monitoring/prometheus.yml`
 
-## 📋 Available Commands
+### To Change Railway URL in the Future
 
-### Windows (PowerShell)
-```powershell
-.\scripts\monitoring-setup.ps1 start    # Start services
-.\scripts\monitoring-setup.ps1 stop     # Stop services
-.\scripts\monitoring-setup.ps1 status   # Check status
-.\scripts\monitoring-setup.ps1 check    # Health check
-.\scripts\monitoring-setup.ps1 targets  # View Prometheus targets
-.\scripts\monitoring-setup.ps1 logs     # View logs
-.\scripts\monitoring-setup.ps1 clean    # Remove all data
+1. **Update `RAILWAY-URL.config`** with your new URL
+2. **Update `infra/monitoring/prometheus.yml`** (around line 46) with the new target
+
+**Full Guide**: See `docs/RAILWAY-CONFIGURATION.md` for detailed instructions.
+
+### Step 2: Deploy to Railway
+
+Railway will automatically:
+- Expose your `/metrics` endpoint
+- Allow Prometheus to scrape metrics
+- Use Railway's monitoring services (if configured)
+
+### Step 3: Configure Grafana Cloud (Optional)
+
+If using Grafana Cloud, update the `remote_write` section in `prometheus.yml`:
+
+```yaml
+remote_write:
+  - url: 'https://prometheus-prod-XX-prod-YY-ZZ.grafana.net/api/prom/push'
+    basic_auth:
+      username: 'YOUR_GRAFANA_USERNAME'
+      password: 'YOUR_GRAFANA_CLOUD_TOKEN'
 ```
 
-### Linux/Mac/Git Bash
-```bash
-./scripts/monitoring-setup.sh start     # Start services
-./scripts/monitoring-setup.sh stop      # Stop services
-./scripts/monitoring-setup.sh status    # Check status
-./scripts/monitoring-setup.sh check     # Health check
-./scripts/monitoring-setup.sh targets   # View Prometheus targets
-./scripts/monitoring-setup.sh logs      # View logs
-./scripts/monitoring-setup.sh clean     # Remove all data
+## 📋 Configuration
+
+### Prometheus Target
+
+**Local Development:**
+```yaml
+targets:
+  - 'localhost:3000'
 ```
 
-## 🔧 Configuration
-
-### Change Coordinator Host
-
-If your Coordinator runs on a different host/port:
-
-**Windows:**
-```powershell
-$env:COORDINATOR_HOST="localhost:3000"
-.\scripts\monitoring-setup.ps1 start
+**Railway Production:**
+```yaml
+targets:
+  - 'your-app.railway.app:443'
 ```
 
-**Linux/Mac:**
-```bash
-export COORDINATOR_HOST="localhost:3000"
-./scripts/monitoring-setup.sh start
-```
+### Environment Variables
 
-### Manual Docker Compose
-
-You can also use Docker Compose directly:
-
-```bash
-docker-compose -f docker-compose.monitoring.yml up -d    # Start
-docker-compose -f docker-compose.monitoring.yml down    # Stop
-docker-compose -f docker-compose.monitoring.yml logs -f # Logs
-```
+The Coordinator service should expose:
+- `/metrics` endpoint (Prometheus format)
+- `/health` endpoint (optional, for health checks)
 
 ## 📊 Access Points
 
-- **Prometheus UI**: http://localhost:9090
-- **Grafana UI**: http://localhost:4000 (admin/admin)
-- **Test Server**: http://localhost:3000 (if running)
-  - Health: http://localhost:3000/health
-  - Metrics: http://localhost:3000/metrics
+**Local Development:**
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:4000 (Docker) or http://localhost:3000 (local install)
+- Coordinator: http://localhost:3000
 
-## 🎯 What This Setup Includes
+**Railway Production:**
+- Coordinator: `https://your-app.railway.app`
+- Metrics: `https://your-app.railway.app/metrics`
 
-✅ **Prometheus** - Metrics collection and storage
-✅ **Grafana** - Dashboard visualization
-✅ **Pre-configured Dashboard** - All required panels
-✅ **Alert Rules** - Pre-configured alerts
-✅ **Auto Data Source** - Prometheus connected to Grafana
-✅ **Isolated Network** - Won't conflict with other services
+## 📈 Viewing Grafana Dashboard
 
-## 🛡️ Isolation Features
+**Quick Start:**
+1. Start Grafana: `npm run monitoring:docker:start` (or install locally)
+2. Access: http://localhost:4000 (Docker) or http://localhost:3000 (local)
+3. Login: `admin` / `admin`
+4. Dashboard should auto-import, or import `infra/monitoring/grafana-dashboard-coordinator.json`
 
-- **Separate Docker network**: `team4-monitoring`
-- **Unique container names**: `team4-prometheus`, `team4-grafana`
-- **Non-conflicting ports**: Grafana on 3001 (not 3000)
-- **Standalone volumes**: Data stored separately
+**Full Guide:** See `docs/GRAFANA-QUICK-START.md` for detailed instructions.
 
-## 📚 More Information
+## 🎯 What's Included
 
-- **Full Guide**: See `docs/monitoring-usage-guide.md`
-- **Setup Details**: See `docs/monitoring-setup.md`
-- **Dashboard Config**: `infra/monitoring/grafana-dashboard-coordinator.json`
-- **Prometheus Config**: `infra/monitoring/prometheus.yml`
+✅ **Prometheus Configuration** - Ready for localhost or Railway  
+✅ **Grafana Dashboard** - Pre-configured panels  
+✅ **Alert Rules** - Service health and security alerts  
+✅ **Metrics Endpoint** - `/metrics` endpoint in Coordinator service  
+
+## 📚 Documentation
+
+- **Full Guide**: `docs/monitoring-usage-guide.md`
+- **Setup Details**: `docs/monitoring-setup.md`
+- **Team 4 Orchestrator**: `docs/team4-orchestrator.md`
 
 ## 🐛 Troubleshooting
 
-### Services won't start
-```bash
-# Check Docker is running
-docker ps
+### Prometheus can't scrape metrics
 
-# Check ports are available
-netstat -an | grep 9090  # Prometheus
-netstat -an | grep 4000  # Grafana
-```
+1. **Check Coordinator is running**: `curl http://localhost:3000/health`
+2. **Check metrics endpoint**: `curl http://localhost:3000/metrics`
+3. **Verify target in prometheus.yml** matches your Coordinator URL
 
-### Prometheus target is DOWN
-1. Check Coordinator/test server is running: `curl http://localhost:3000/health`
-2. Check metrics endpoint: `curl http://localhost:3000/metrics`
-3. Update `COORDINATOR_HOST` if Coordinator is on different host/port
+### Metrics not appearing in Grafana
 
-### Grafana shows "No data"
-1. Check Prometheus data source is configured (should auto-configure)
-2. Check Prometheus has data: http://localhost:9090/graph
-3. Query: `up{job="coordinator"}` should return `1`
-
-### Clean start
-```bash
-# Remove everything and start fresh
-.\scripts\monitoring-setup.ps1 clean
-.\scripts\monitoring-setup.ps1 start
-```
-
-## ✅ Verification Checklist
-
-- [ ] Monitoring stack started (`status` command shows running)
-- [ ] Prometheus accessible (http://localhost:9090)
-- [ ] Grafana accessible (http://localhost:4000)
-- [ ] Coordinator/test server running (http://localhost:3000/health)
-- [ ] Prometheus target shows UP (http://localhost:9090/targets)
-- [ ] Grafana dashboard shows data (not "No data")
-- [ ] Metrics updating when generating traffic
+1. **Check Prometheus has data**: Query `up{job="coordinator"}` in Prometheus UI
+2. **Verify Grafana data source** points to Prometheus
+3. **Check time range** in Grafana (try "Last 5 minutes")
 
 ---
 
-**Happy Monitoring! 📊✨**
-
+**For Railway deployment, simply update the target URL in `prometheus.yml`! 🚂**

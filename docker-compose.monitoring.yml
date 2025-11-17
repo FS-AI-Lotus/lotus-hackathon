@@ -1,7 +1,10 @@
-# Team 4 Monitoring Stack - Standalone Setup
-# Note: version is obsolete in Docker Compose v2, removed to avoid warnings
-# This setup runs Prometheus and Grafana independently
-# Does not interfere with other teams' services
+# Team 4 Monitoring Stack - OPTIONAL Docker Setup
+# 
+# NOTE: This is optional. For local development, you can run Prometheus and Grafana
+# directly on your host machine. For production, use Railway's monitoring services.
+#
+# This Docker setup is provided for convenience but is not required.
+# Primary approach: localhost for local dev, Railway URL for production.
 
 services:
   prometheus:
@@ -21,9 +24,11 @@ services:
       - '--storage.tsdb.retention.time=15d'
       - '--web.enable-lifecycle'
     environment:
-      - COORDINATOR_HOST=${COORDINATOR_HOST:-host.docker.internal:3000}
+      - COORDINATOR_HOST=${COORDINATOR_HOST:-localhost:3000}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - GRAFANA_CLOUD_TOKEN=${GRAFANA_CLOUD_TOKEN:-YOUR_GRAFANA_CLOUD_TOKEN_HERE}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # For Windows/Mac Docker access to host
     networks:
       - team4-monitoring
     restart: unless-stopped
@@ -57,31 +62,6 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
-  # Optional: Grafana Alloy for forwarding metrics to Grafana Cloud
-  # Uncomment to enable Alloy and forward metrics to Grafana Cloud
-  alloy:
-    image: grafana/alloy:latest
-    container_name: team4-alloy
-    ports:
-      - "12345:12345"  # Alloy UI
-    volumes:
-      - ./infra/monitoring/alloy.config:/etc/alloy/config.alloy:ro
-    environment:
-      - COORDINATOR_HOST=${COORDINATOR_HOST:-host.docker.internal:3000}
-      - ENVIRONMENT=${ENVIRONMENT:-development}
-    command:
-      - run
-      - --server.http.listen-addr=0.0.0.0:12345
-      - /etc/alloy/config.alloy
-    networks:
-      - team4-monitoring
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:12345/-/healthy"]
       interval: 10s
       timeout: 5s
       retries: 3

@@ -4,15 +4,11 @@ This guide explains how to set up Grafana Alloy on Windows to forward metrics an
 
 ## ⚠️ Security Warning
 
-**DO NOT commit API keys or tokens to the repository.** The API key in installation commands should be stored as an environment variable or secret management system.
-
-## ⚠️ Security Warning
-
-**IMPORTANT:** The installation command contains an API key. **DO NOT** run this command if you're sharing your screen or if the command will be logged. Instead:
-
-1. Set the API key as an environment variable
-2. Use the manual installation steps below
-3. Or use the provided configuration file with environment variables
+**IMPORTANT:** 
+- **DO NOT commit API keys or tokens to the repository**
+- The installation command contains an API key - **DO NOT** run this command if you're sharing your screen or if the command will be logged
+- Store API keys as environment variables or use secret management systems
+- Use Option 2 (environment variables) or Option 3 (custom config) for secure installation
 
 ## Installation
 

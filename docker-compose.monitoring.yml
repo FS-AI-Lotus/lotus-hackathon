@@ -61,8 +61,8 @@ services:
       timeout: 5s
       retries: 3
 
-  Optional: Grafana Alloy for forwarding metrics to Grafana Cloud
-  Uncomment to enable Alloy and forward metrics to Grafana Cloud
+  # Optional: Grafana Alloy for forwarding metrics to Grafana Cloud
+  # Uncomment to enable Alloy and forward metrics to Grafana Cloud
   alloy:
     image: grafana/alloy:latest
     container_name: team4-alloy

@@ -16,6 +16,7 @@
 
 const jwt = require('jsonwebtoken');
 const { config } = require('../config');
+const { security } = require('../logger');
 
 /**
  * JWT Authentication Middleware
@@ -31,6 +32,8 @@ function authServiceJwtMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
+    security({ req, reason: 'missing_authorization_header' }, 
+      'Authentication failed: Missing Authorization header');
     return res.status(401).json({
       error: 'Unauthorized',
       message: 'Missing Authorization header',
@@ -42,6 +45,8 @@ function authServiceJwtMiddleware(req, res, next) {
   
   // Check for missing token (only "Bearer" without token)
   if (parts.length === 1 && parts[0] === 'Bearer') {
+    security({ req, reason: 'missing_token' }, 
+      'Authentication failed: Missing token in Authorization header');
     return res.status(401).json({
       error: 'Unauthorized',
       message: 'Missing token in Authorization header',
@@ -50,6 +55,8 @@ function authServiceJwtMiddleware(req, res, next) {
   
   // Check for invalid format
   if (parts.length !== 2 || parts[0] !== 'Bearer') {
+    security({ req, reason: 'invalid_header_format' }, 
+      'Authentication failed: Invalid Authorization header format');
     return res.status(401).json({
       error: 'Unauthorized',
       message: 'Invalid Authorization header format. Expected: "Bearer <token>"',
@@ -60,6 +67,8 @@ function authServiceJwtMiddleware(req, res, next) {
 
   // Check for missing token (empty string after split)
   if (!token || token.trim() === '') {
+    security({ req, reason: 'empty_token' }, 
+      'Authentication failed: Empty token in Authorization header');
     return res.status(401).json({
       error: 'Unauthorized',
       message: 'Missing token in Authorization header',
@@ -98,6 +107,8 @@ function authServiceJwtMiddleware(req, res, next) {
 
     // Validate required claims
     if (!decoded.sub && !decoded.service_id) {
+      security({ req, reason: 'missing_required_claims' }, 
+        'Authentication failed: Token missing required claim (sub or service_id)');
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Token missing required claim: sub or service_id',
@@ -126,6 +137,8 @@ function authServiceJwtMiddleware(req, res, next) {
       error.message.includes('jwt issuer') ||
       error.message.includes('jwt audience')
     )) {
+      security({ req, reason: 'invalid_issuer_or_audience', errorType: error.name }, 
+        `Authentication failed: Token validation failed - ${error.message}`);
       return res.status(403).json({
         error: 'Forbidden',
         message: 'Token validation failed',
@@ -135,6 +148,8 @@ function authServiceJwtMiddleware(req, res, next) {
 
     // Handle other JWT verification errors
     if (error.name === 'JsonWebTokenError') {
+      security({ req, reason: 'invalid_token', errorType: error.name }, 
+        `Authentication failed: Invalid token - ${error.message}`);
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Invalid token',
@@ -143,6 +158,8 @@ function authServiceJwtMiddleware(req, res, next) {
     }
 
     if (error.name === 'TokenExpiredError') {
+      security({ req, reason: 'token_expired', errorType: error.name }, 
+        `Authentication failed: Token has expired`);
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Token has expired',
@@ -151,6 +168,8 @@ function authServiceJwtMiddleware(req, res, next) {
     }
 
     if (error.name === 'NotBeforeError') {
+      security({ req, reason: 'token_not_yet_valid', errorType: error.name }, 
+        `Authentication failed: Token not yet valid`);
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Token not yet valid',
@@ -159,6 +178,8 @@ function authServiceJwtMiddleware(req, res, next) {
     }
 
     // Unknown error
+    security({ req, reason: 'unknown_error', errorType: error.name }, 
+      `Authentication failed: Token verification failed - ${error.message}`);
     return res.status(401).json({
       error: 'Unauthorized',
       message: 'Token verification failed',

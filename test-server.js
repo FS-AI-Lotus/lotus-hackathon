@@ -28,8 +28,15 @@ const { strictRateLimiter, moderateRateLimiter } = require('./src/security/rateL
 const { validateRegisterMiddleware, validateRouteMiddleware } = require('./src/security/validationMiddleware');
 const { sqlInjectionProtection, promptInjectionDetection } = require('./src/security/injectionProtection');
 
+// Logging middleware
+const correlationIdMiddleware = require('./src/middleware/correlationId');
+const { info, error, security, audit } = require('./src/logger');
+
 const app = express();
 app.use(express.json());
+
+// Add correlation ID middleware (must be early in the stack)
+app.use(correlationIdMiddleware);
 
 // Add metrics middleware (must be before routes)
 app.use(httpMetricsMiddleware);
@@ -63,11 +70,18 @@ app.post('/register',
   (req, res) => {
   try {
     const { name, url, schema } = req.body;
+    const serviceId = req.serviceContext?.serviceId || 'unknown';
+
+    // Check if service already exists (for schema change detection)
+    const existingService = Array.from(registeredServices.values())
+      .find(s => s.name === name || s.url === url);
+    
+    const oldSchema = existingService ? existingService.schema : null;
 
     // Register service
-    const serviceId = `service-${Date.now()}`;
-    registeredServices.set(serviceId, {
-      id: serviceId,
+    const newServiceId = `service-${Date.now()}`;
+    registeredServices.set(newServiceId, {
+      id: newServiceId,
       name,
       url,
       schema: schema || {},
@@ -77,17 +91,40 @@ app.post('/register',
     // Track successful registration
     incrementServiceRegistration('success');
 
+    // Audit log: Service registration success
+    audit({ req, serviceId, registeredService: { id: newServiceId, name, url } }, 
+      `Service registered successfully: ${name}`);
+
+    // Audit log: Schema change (if updating existing service)
+    if (existingService && schema) {
+      const schemaChanged = JSON.stringify(oldSchema) !== JSON.stringify(schema);
+      if (schemaChanged) {
+        audit({ 
+          req, 
+          serviceId, 
+          registeredService: { id: newServiceId, name },
+          oldSchema: oldSchema ? JSON.stringify(oldSchema).substring(0, 100) : null,
+          newSchema: JSON.stringify(schema).substring(0, 100),
+        }, 
+        `Schema updated for service: ${name}`);
+      }
+    }
+
     res.status(201).json({
-      id: serviceId,
+      id: newServiceId,
       name,
       url,
-      registeredAt: registeredServices.get(serviceId).registeredAt
+      registeredAt: registeredServices.get(newServiceId).registeredAt
     });
-  } catch (error) {
+  } catch (err) {
     incrementServiceRegistration('failed');
+    
+    // Audit log: Registration failure
+    audit({ req, error: err }, `Service registration failed: ${err.message}`);
+    
     res.status(500).json({ 
       error: 'Registration failed',
-      message: error.message
+      message: err.message
     });
   }
 });
@@ -102,6 +139,7 @@ app.post('/route',
   (req, res) => {
   try {
     const { origin, destination, data } = req.body;
+    const serviceId = req.serviceContext?.serviceId || 'unknown';
 
     // Check if destination service is registered
     const destinationService = Array.from(registeredServices.values())
@@ -109,6 +147,11 @@ app.post('/route',
 
     if (!destinationService) {
       incrementRoutingResult('failed');
+      
+      // Audit log: Routing failure
+      audit({ req, serviceId, destination }, 
+        `Routing failed: destination service not found: ${destination}`);
+      
       return res.status(404).json({ 
         error: 'Destination service not found',
         destination
@@ -119,6 +162,16 @@ app.post('/route',
     // For testing, we'll just return success
     incrementRoutingResult('success');
 
+    // Audit log: Routing success
+    audit({ 
+      req, 
+      serviceId, 
+      origin, 
+      destination: destinationService.name,
+      dataSize: JSON.stringify(data).length 
+    }, 
+    `Data routed successfully from ${origin} to ${destinationService.name}`);
+
     res.status(200).json({
       success: true,
       origin,
@@ -127,11 +180,15 @@ app.post('/route',
       routedAt: new Date().toISOString(),
       dataSize: JSON.stringify(data).length
     });
-  } catch (error) {
+  } catch (err) {
     incrementRoutingResult('failed');
+    
+    // Audit log: Routing failure
+    audit({ req, error: err }, `Routing operation failed: ${err.message}`);
+    
     res.status(500).json({ 
       error: 'Routing failed',
-      message: error.message
+      message: err.message
     });
   }
 });

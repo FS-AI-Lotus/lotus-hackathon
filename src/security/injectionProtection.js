@@ -13,6 +13,8 @@
  * - Truncates overly long inputs
  */
 
+const { security } = require('../logger');
+
 /**
  * Common SQL injection patterns to detect
  */
@@ -131,7 +133,9 @@ function sqlInjectionProtection(req, res, next) {
   if (req.body && typeof req.body === 'object') {
     const bodyString = JSON.stringify(req.body);
     if (detectSQLInjection(bodyString)) {
-      // Log security event (will be wired to logger in Iteration 4)
+      // Log security event
+      security({ req, reason: 'sql_injection_attempt', input: bodyString.substring(0, 200) }, 
+        'SQL injection attempt detected in request body');
       return res.status(400).json({
         error: 'Bad Request',
         message: 'Invalid input detected. SQL injection attempts are not allowed.',
@@ -143,6 +147,8 @@ function sqlInjectionProtection(req, res, next) {
   if (req.query) {
     for (const [key, value] of Object.entries(req.query)) {
       if (typeof value === 'string' && detectSQLInjection(value)) {
+        security({ req, reason: 'sql_injection_attempt', parameter: key, input: value.substring(0, 200) }, 
+          `SQL injection attempt detected in query parameter: ${key}`);
         return res.status(400).json({
           error: 'Bad Request',
           message: 'Invalid input detected. SQL injection attempts are not allowed.',
@@ -180,7 +186,9 @@ function promptInjectionDetection(req, res, next) {
   if (req.body && typeof req.body === 'object') {
     const bodyString = JSON.stringify(req.body);
     if (detectPromptInjection(bodyString)) {
-      // Log security event (will be wired to logger in Iteration 4)
+      // Log security event
+      security({ req, reason: 'prompt_injection_attempt', input: bodyString.substring(0, 200) }, 
+        'Prompt injection attempt detected in request body');
       return res.status(400).json({
         error: 'Bad Request',
         message: 'Invalid input detected. Prompt injection attempts are not allowed.',

@@ -12,6 +12,7 @@
 
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');
+const { security } = require('../logger');
 
 /**
  * Create a rate limiter with custom configuration
@@ -55,8 +56,17 @@ function createRateLimiter(options) {
     },
     // Handler for when limit is exceeded
     handler: (req, res) => {
-      // Log security event (will be wired to logger in Iteration 4)
-      // For now, just return error
+      // Log security event
+      const identifier = req.serviceContext?.serviceId || req.ip || 'unknown';
+      security({ 
+        req, 
+        reason: 'rate_limit_exceeded',
+        limit: max,
+        windowMs,
+        identifier 
+      }, 
+      `Rate limit exceeded: ${identifier} exceeded limit of ${max} requests per ${Math.ceil(windowMs / 1000)}s`);
+      
       res.status(429).json({
         error: 'Too Many Requests',
         message,

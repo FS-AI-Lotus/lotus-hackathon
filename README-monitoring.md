@@ -23,7 +23,7 @@ chmod +x scripts/monitoring-setup.sh
 
 This starts:
 - **Prometheus** on http://localhost:9090
-- **Grafana** on http://localhost:3001 (admin/admin)
+- **Grafana** on http://localhost:4000 (admin/admin)
 
 ### 2. Start Test Server (Optional)
 
@@ -41,7 +41,7 @@ This starts a test server on http://localhost:3000 with `/health` and `/metrics`
    - Go to **Status → Targets**
    - Coordinator should show as `UP` (green)
 
-2. **Check Grafana**: http://localhost:3001
+2. **Check Grafana**: http://localhost:4000
    - Login: `admin` / `admin`
    - Dashboard should auto-import
    - Panels should show data
@@ -101,7 +101,7 @@ docker-compose -f docker-compose.monitoring.yml logs -f # Logs
 ## 📊 Access Points
 
 - **Prometheus UI**: http://localhost:9090
-- **Grafana UI**: http://localhost:3001 (admin/admin)
+- **Grafana UI**: http://localhost:4000 (admin/admin)
 - **Test Server**: http://localhost:3000 (if running)
   - Health: http://localhost:3000/health
   - Metrics: http://localhost:3000/metrics
@@ -138,7 +138,7 @@ docker ps
 
 # Check ports are available
 netstat -an | grep 9090  # Prometheus
-netstat -an | grep 3001  # Grafana
+netstat -an | grep 4000  # Grafana
 ```
 
 ### Prometheus target is DOWN
@@ -162,7 +162,7 @@ netstat -an | grep 3001  # Grafana
 
 - [ ] Monitoring stack started (`status` command shows running)
 - [ ] Prometheus accessible (http://localhost:9090)
-- [ ] Grafana accessible (http://localhost:3001)
+- [ ] Grafana accessible (http://localhost:4000)
 - [ ] Coordinator/test server running (http://localhost:3000/health)
 - [ ] Prometheus target shows UP (http://localhost:9090/targets)
 - [ ] Grafana dashboard shows data (not "No data")

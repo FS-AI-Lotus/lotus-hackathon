@@ -85,7 +85,7 @@ start_monitoring() {
     echo ""
     print_info "Services:"
     echo "  📊 Prometheus: http://localhost:9090"
-    echo "  📈 Grafana:    http://localhost:3001 (admin/admin)"
+    echo "  📈 Grafana:    http://localhost:4000 (admin/admin)"
     echo ""
     print_info "Waiting for services to be ready..."
     sleep 5
@@ -126,8 +126,8 @@ check_services() {
     fi
     
     # Check Grafana
-    if curl -s http://localhost:3001/api/health > /dev/null; then
-        print_success "Grafana is running (http://localhost:3001)"
+    if curl -s http://localhost:4000/api/health > /dev/null; then
+        print_success "Grafana is running (http://localhost:4000)"
     else
         print_warning "Grafana may still be starting up..."
     fi

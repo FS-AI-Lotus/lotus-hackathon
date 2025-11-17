@@ -164,7 +164,7 @@ groups:
           # Placeholder: Update when auth failure metrics are available
           # Example: rate(auth_failures_total{service="coordinator"}[1m]) > 10
           # For now, using a condition that will be updated in Iteration 4/7
-          0 > 10
+          (0 > bool 10)
         for: 1m
         labels:
           severity: warning
@@ -180,7 +180,7 @@ groups:
       - alert: HighAuthFailureRateCritical
         expr: |
           # Placeholder: Update when auth failure metrics are available
-          0 > 50
+          (0 > bool 50)
         for: 1m
         labels:
           severity: critical
@@ -199,7 +199,7 @@ groups:
         expr: |
           # Placeholder: Update when rate limit metrics are available
           # Example: rate(rate_limit_violations_total{service="coordinator"}[1m]) > 5
-          0 > 5
+          (0 > bool 5)
         for: 1m
         labels:
           severity: warning
@@ -215,7 +215,7 @@ groups:
       - alert: RateLimitExceededCritical
         expr: |
           # Placeholder: Update when rate limit metrics are available
-          0 > 20
+          (0 > bool 20)
         for: 1m
         labels:
           severity: critical
@@ -234,7 +234,7 @@ groups:
         expr: |
           # Placeholder: Update when security event metrics are available
           # Example: count by (ip, serviceId) (security_events_total{service="coordinator"}[5m]) > 10
-          0 > 10
+          (0 > bool 10)
         for: 5m
         labels:
           severity: warning
@@ -253,7 +253,7 @@ groups:
         expr: |
           # Placeholder: Update when injection detection metrics are available
           # Example: rate(injection_attempts_total{service="coordinator",type=~"sql|prompt"}[5m]) > 0.1
-          0 > 0.1
+          (0 > bool 0.1)
         for: 5m
         labels:
           severity: warning
@@ -269,7 +269,7 @@ groups:
       - alert: InjectionAttemptsCritical
         expr: |
           # Placeholder: Update when injection detection metrics are available
-          0 > 1.0
+          (0 > bool 1.0)
         for: 2m
         labels:
           severity: critical

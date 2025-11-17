@@ -48,3 +48,4 @@ alloy.exe run --server.http.listen-addr=0.0.0.0:12345 infra\monitoring\alloy.con
 
 pause
 
+

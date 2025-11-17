@@ -1,6 +1,5 @@
-version: '3.8'
-
 # Team 4 Monitoring Stack - Standalone Setup
+# Note: version is obsolete in Docker Compose v2, removed to avoid warnings
 # This setup runs Prometheus and Grafana independently
 # Does not interfere with other teams' services
 
@@ -24,6 +23,7 @@ services:
     environment:
       - COORDINATOR_HOST=${COORDINATOR_HOST:-host.docker.internal:3000}
       - ENVIRONMENT=${ENVIRONMENT:-development}
+      - GRAFANA_CLOUD_TOKEN=${GRAFANA_CLOUD_TOKEN:-YOUR_GRAFANA_CLOUD_TOKEN_HERE}
     networks:
       - team4-monitoring
     restart: unless-stopped
@@ -37,7 +37,7 @@ services:
     image: grafana/grafana:latest
     container_name: team4-grafana
     ports:
-      - "3001:3000"  # Grafana UI (using 3001 to avoid conflict with Coordinator on 3000)
+      - "4000:3000"  # Grafana UI (using 4000 to avoid Windows port conflicts)
     volumes:
       - grafana-data:/var/lib/grafana
       - ./infra/monitoring/grafana-dashboard-coordinator.json:/etc/grafana/provisioning/dashboards/coordinator.json:ro
@@ -46,7 +46,7 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_SERVER_ROOT_URL=http://localhost:3001
+      - GF_SERVER_ROOT_URL=http://localhost:4000
       - GF_INSTALL_PLUGINS=
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/coordinator.json
     networks:

@@ -65,13 +65,13 @@ scrape_configs:
 
 # Optional: Remote write configuration for Grafana Cloud
 # Uncomment to forward metrics directly to Grafana Cloud (alternative to Alloy)
-# remote_write:
-#   - url: 'https://prometheus-prod-53-prod-me-central-1.grafana.net/api/prom/push'
-#     basic_auth:
-#       username: '2805139'
-#       password: '${GRAFANA_CLOUD_TOKEN}'  # Replace with your actual Grafana Cloud token
-#     queue_config:
-#       max_samples_per_send: 1000
-#       max_shards: 200
-#       capacity: 2500
+remote_write:
+  - url: 'https://prometheus-prod-XX-prod-YY-ZZ.grafana.net/api/prom/push'
+    basic_auth:
+      username: '${GRAFANA_CLOUD_USERNAME}'
+      password: 'YOUR_GRAFANA_CLOUD_TOKEN_HERE'
+    queue_config:
+      max_samples_per_send: 1000
+      max_shards: 200
+      capacity: 2500
 

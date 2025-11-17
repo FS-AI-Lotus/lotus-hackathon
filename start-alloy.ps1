@@ -50,3 +50,4 @@ Write-Host ""
 # Run Alloy
 & .\alloy.exe run --server.http.listen-addr=0.0.0.0:12345 infra/monitoring/alloy.config
 
+

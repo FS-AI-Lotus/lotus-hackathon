@@ -13,13 +13,16 @@
     "monitoring:stop": "docker compose -f docker-compose.monitoring.yml down",
     "monitoring:status": "docker compose -f docker-compose.monitoring.yml ps",
     "monitoring:logs": "docker compose -f docker-compose.monitoring.yml logs -f",
+    "monitoring:restart": "docker compose -f docker-compose.monitoring.yml restart",
     "test-server": "node test-server.js",
     "test-traffic": "node -e \"console.log('Use: ./test-traffic.sh (Linux/Mac) or .\\test-traffic.ps1 (Windows)')\""
   },
   "dependencies": {
     "express": "^5.1.0",
     "express-rate-limit": "^8.2.1",
+    "is-sql-injection": "^1.0.0",
     "jsonwebtoken": "^9.0.2",
+    "perfect-express-sanitizer": "^2.0.2",
     "prom-client": "^15.1.3",
     "uuid": "^13.0.0",
     "winston": "^3.18.3",

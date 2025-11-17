@@ -49,12 +49,23 @@ function Test-Dependencies {
     }
     Write-Success "Docker is installed"
     
-    if (-not (Get-Command docker-compose -ErrorAction SilentlyContinue) -and 
-        -not (docker compose version 2>$null)) {
-        Write-Error "Docker Compose is not installed."
+    # Check for docker compose (modern) or docker-compose (legacy)
+    $hasDockerCompose = $false
+    if (Get-Command docker -ErrorAction SilentlyContinue) {
+        if (docker compose version 2>$null) {
+            $hasDockerCompose = $true
+            $script:DockerComposeCmd = "docker compose"
+        } elseif (Get-Command docker-compose -ErrorAction SilentlyContinue) {
+            $hasDockerCompose = $true
+            $script:DockerComposeCmd = "docker-compose"
+        }
+    }
+    
+    if (-not $hasDockerCompose) {
+        Write-Error "Docker Compose is not installed. Please install Docker Desktop."
         exit 1
     }
-    Write-Success "Docker Compose is installed"
+    Write-Success "Docker Compose is installed (using: $script:DockerComposeCmd)"
 }
 
 function Start-Monitoring {
@@ -68,8 +79,21 @@ function Start-Monitoring {
         Write-Info "Set COORDINATOR_HOST environment variable to change this"
     }
     
+    # Determine which docker compose command to use
+    if (-not $script:DockerComposeCmd) {
+        if (docker compose version 2>$null) {
+            $script:DockerComposeCmd = "docker compose"
+        } else {
+            $script:DockerComposeCmd = "docker-compose"
+        }
+    }
+    
     Write-Info "Starting Prometheus and Grafana..."
-    docker-compose -f $ComposeFile up -d
+    if ($script:DockerComposeCmd -eq "docker compose") {
+        docker compose -f $ComposeFile up -d
+    } else {
+        docker-compose -f $ComposeFile up -d
+    }
     
     Write-Success "Monitoring stack started!"
     Write-Host ""
@@ -88,7 +112,21 @@ function Stop-Monitoring {
     Write-Header "Stopping Team 4 Monitoring Stack"
     
     Push-Location $ProjectRoot
-    docker-compose -f $ComposeFile down
+    
+    # Determine which docker compose command to use
+    if (-not $script:DockerComposeCmd) {
+        if (docker compose version 2>$null) {
+            $script:DockerComposeCmd = "docker compose"
+        } else {
+            $script:DockerComposeCmd = "docker-compose"
+        }
+    }
+    
+    if ($script:DockerComposeCmd -eq "docker compose") {
+        docker compose -f $ComposeFile down
+    } else {
+        docker-compose -f $ComposeFile down
+    }
     Write-Success "Monitoring stack stopped!"
     Pop-Location
 }
@@ -130,7 +168,21 @@ function Show-Status {
     Write-Header "Team 4 Monitoring Stack Status"
     
     Push-Location $ProjectRoot
-    docker-compose -f $ComposeFile ps
+    
+    # Determine which docker compose command to use
+    if (-not $script:DockerComposeCmd) {
+        if (docker compose version 2>$null) {
+            $script:DockerComposeCmd = "docker compose"
+        } else {
+            $script:DockerComposeCmd = "docker-compose"
+        }
+    }
+    
+    if ($script:DockerComposeCmd -eq "docker compose") {
+        docker compose -f $ComposeFile ps
+    } else {
+        docker-compose -f $ComposeFile ps
+    }
     Write-Host ""
     Test-Services
     Pop-Location
@@ -146,7 +198,21 @@ function Show-Targets {
 function View-Logs {
     Write-Header "Monitoring Stack Logs"
     Push-Location $ProjectRoot
-    docker-compose -f $ComposeFile logs -f
+    
+    # Determine which docker compose command to use
+    if (-not $script:DockerComposeCmd) {
+        if (docker compose version 2>$null) {
+            $script:DockerComposeCmd = "docker compose"
+        } else {
+            $script:DockerComposeCmd = "docker-compose"
+        }
+    }
+    
+    if ($script:DockerComposeCmd -eq "docker compose") {
+        docker compose -f $ComposeFile logs -f
+    } else {
+        docker-compose -f $ComposeFile logs -f
+    }
     Pop-Location
 }
 
@@ -156,7 +222,21 @@ function Clean-Data {
     $response = Read-Host "This will delete all Prometheus and Grafana data. Continue? (y/N)"
     if ($response -eq "y" -or $response -eq "Y") {
         Push-Location $ProjectRoot
-        docker-compose -f $ComposeFile down -v
+        
+        # Determine which docker compose command to use
+        if (-not $script:DockerComposeCmd) {
+            if (docker compose version 2>$null) {
+                $script:DockerComposeCmd = "docker compose"
+            } else {
+                $script:DockerComposeCmd = "docker-compose"
+            }
+        }
+        
+        if ($script:DockerComposeCmd -eq "docker compose") {
+            docker compose -f $ComposeFile down -v
+        } else {
+            docker-compose -f $ComposeFile down -v
+        }
         Write-Success "All monitoring data cleaned!"
         Pop-Location
     } else {

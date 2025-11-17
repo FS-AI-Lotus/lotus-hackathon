@@ -74,7 +74,12 @@ start_monitoring() {
     
     # Start services
     print_info "Starting Prometheus and Grafana..."
-    docker-compose -f "$COMPOSE_FILE" up -d
+    # Try docker compose (modern) first, fallback to docker-compose (legacy)
+    if docker compose version &> /dev/null; then
+        docker compose -f "$COMPOSE_FILE" up -d
+    else
+        docker-compose -f "$COMPOSE_FILE" up -d
+    fi
     
     print_success "Monitoring stack started!"
     echo ""
@@ -93,7 +98,12 @@ stop_monitoring() {
     print_header "Stopping Team 4 Monitoring Stack"
     
     cd "$PROJECT_ROOT"
-    docker-compose -f "$COMPOSE_FILE" down
+    # Try docker compose (modern) first, fallback to docker-compose (legacy)
+    if docker compose version &> /dev/null; then
+        docker compose -f "$COMPOSE_FILE" down
+    else
+        docker-compose -f "$COMPOSE_FILE" down
+    fi
     
     print_success "Monitoring stack stopped!"
 }
@@ -151,7 +161,12 @@ check_prometheus_targets() {
 view_logs() {
     print_header "Monitoring Stack Logs"
     cd "$PROJECT_ROOT"
-    docker-compose -f "$COMPOSE_FILE" logs -f
+    # Try docker compose (modern) first, fallback to docker-compose (legacy)
+    if docker compose version &> /dev/null; then
+        docker compose -f "$COMPOSE_FILE" logs -f
+    else
+        docker-compose -f "$COMPOSE_FILE" logs -f
+    fi
 }
 
 clean_data() {
@@ -161,7 +176,12 @@ clean_data() {
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         cd "$PROJECT_ROOT"
-        docker-compose -f "$COMPOSE_FILE" down -v
+        # Try docker compose (modern) first, fallback to docker-compose (legacy)
+        if docker compose version &> /dev/null; then
+            docker compose -f "$COMPOSE_FILE" down -v
+        else
+            docker-compose -f "$COMPOSE_FILE" down -v
+        fi
         print_success "All monitoring data cleaned!"
     else
         print_info "Cancelled"
@@ -172,7 +192,12 @@ show_status() {
     print_header "Team 4 Monitoring Stack Status"
     
     cd "$PROJECT_ROOT"
-    docker-compose -f "$COMPOSE_FILE" ps
+    # Try docker compose (modern) first, fallback to docker-compose (legacy)
+    if docker compose version &> /dev/null; then
+        docker compose -f "$COMPOSE_FILE" ps
+    else
+        docker-compose -f "$COMPOSE_FILE" ps
+    fi
     
     echo ""
     check_services

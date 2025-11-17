@@ -12,38 +12,48 @@ This monitoring setup uses **localhost for local development** and can be easily
 
 ## 🚀 Local Development Setup
 
-### Option 1: Run Prometheus & Grafana Locally (Recommended)
+### ⚡ Quick Start (Recommended - Docker)
 
-1. **Install Prometheus & Grafana** on your machine
-2. **Update `prometheus.yml`** - target is already set to `localhost:3000`
-3. **Start your Coordinator service** on port 3000
-4. **Start Prometheus**: `prometheus --config.file=./infra/monitoring/prometheus.yml`
-5. **Start Grafana** and import the dashboard
-
-### Option 2: Use Docker (Optional)
-
-If you prefer Docker for local development:
+**Easiest way - no installation needed:**
 
 ```bash
 npm run monitoring:docker:start
 ```
 
-This uses `docker-compose.monitoring.yml` (optional setup).
+This starts:
+- ✅ Prometheus (scrapes your Railway app or localhost)
+- ✅ Grafana (visualizes metrics)
+
+**Access:**
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:4000 (admin/admin)
+
+### Option 2: Install Prometheus Locally
+
+1. **Install Prometheus** on your machine
+2. **Start Prometheus**: `prometheus --config.file=./infra/monitoring/prometheus.yml`
+3. **Install Grafana** and import the dashboard
+
+**Note:** For Railway production monitoring, Docker is recommended (no installation needed).
 
 ## 🚂 Railway Production Setup
 
-### Current Configuration
+### ⚡ Quick Configuration
 
-Your Railway URL is already configured:
-- **URL**: `ms8-learning-analytics-production.up.railway.app:443`
-- **File**: `infra/monitoring/prometheus.yml`
+**To use your Railway URL**, open `infra/monitoring/prometheus.yml` and find line **51**:
 
-### To Change Railway URL in the Future
+**Find this:**
+```yaml
+- 'YOUR_PRODUCTION_URL_HERE:443'  # ⬅️ CHANGE THIS
+```
 
-1. **Update `RAILWAY-URL.config`** with your new URL
-2. **Update `infra/monitoring/prometheus.yml`** (around line 46) with the new target
+**Replace with:**
+```yaml
+- 'ms8-learning-analytics-production.up.railway.app:443'
+```
 
-**Full Guide**: See `docs/RAILWAY-CONFIGURATION.md` for detailed instructions.
+**Quick Guide**: See `SET-PRODUCTION-URL.md` for step-by-step instructions.  
+**Full Guide**: See `docs/RAILWAY-CONFIGURATION.md` for detailed information.
 
 ### Step 2: Deploy to Railway
 
@@ -119,6 +129,7 @@ The Coordinator service should expose:
 - **Full Guide**: `docs/monitoring-usage-guide.md`
 - **Setup Details**: `docs/monitoring-setup.md`
 - **Team 4 Orchestrator**: `docs/team4-orchestrator.md`
+- **Grafana Public Dashboards**: `docs/GRAFANA-PUBLIC-DASHBOARDS.md` - Find and import dashboards from grafana.com/dashboards
 
 ## 🐛 Troubleshooting
 

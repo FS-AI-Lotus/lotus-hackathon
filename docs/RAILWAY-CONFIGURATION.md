@@ -2,24 +2,41 @@
 
 ## Current Configuration
 
-Your Railway production URL is configured as:
-- **URL**: `https://ms8-learning-analytics-production.up.railway.app`
+**Note**: The Prometheus configuration uses a generic placeholder. You need to set your production URL.
+
+To configure your Railway production URL:
+1. Update `infra/monitoring/prometheus.yml` (line 46) with your Railway URL
+2. Update `RAILWAY-URL.config` with your Railway URL
+
+**Example Railway URL format:**
+- **URL**: `https://your-app.railway.app`
 - **Port**: `443` (HTTPS)
-- **Metrics Endpoint**: `https://ms8-learning-analytics-production.up.railway.app/metrics`
+- **Metrics Endpoint**: `https://your-app.railway.app/metrics`
 
 ## 📋 Quick Configuration
 
-### Step 1: Verify Your Railway URL
+### Step 1: Configure Your Production URL
 
-Your current Railway URL is set in:
-- `infra/monitoring/prometheus.yml` (line 46)
-- `RAILWAY-URL.config` (reference file)
+Update the Prometheus configuration with your Railway URL:
 
-### Step 2: Update Prometheus Configuration
+1. **Update `infra/monitoring/prometheus.yml`** (line 46):
+   ```yaml
+   static_configs:
+     - targets:
+         - 'your-app.railway.app:443'  # Replace with your Railway URL
+   ```
 
-The Prometheus configuration is already set for your Railway URL:
+2. **Update `RAILWAY-URL.config`** (optional, for reference):
+   ```
+   PRODUCTION_URL=your-app.railway.app
+   PRODUCTION_PORT=443
+   ```
+
+### Step 2: Verify Prometheus Configuration
+
+The Prometheus configuration should have:
 - **File**: `infra/monitoring/prometheus.yml`
-- **Target**: `ms8-learning-analytics-production.up.railway.app:443`
+- **Target**: `your-app.railway.app:443` (your Railway URL)
 - **Scheme**: `https`
 - **Metrics Path**: `/metrics`
 
@@ -28,8 +45,8 @@ The Prometheus configuration is already set for your Railway URL:
 Make sure your Railway app exposes the `/metrics` endpoint:
 
 ```bash
-# Test the metrics endpoint
-curl https://ms8-learning-analytics-production.up.railway.app/metrics
+# Test the metrics endpoint (replace with your URL)
+curl https://your-app.railway.app/metrics
 ```
 
 You should see Prometheus-formatted metrics output.
@@ -38,10 +55,10 @@ You should see Prometheus-formatted metrics output.
 
 ### Option 1: Update Files Directly
 
-1. **Update `RAILWAY-URL.config`**:
-   ```bash
-   RAILWAY_URL=your-new-app.railway.app
-   RAILWAY_PORT=443
+1. **Update `RAILWAY-URL.config`** (optional, for reference):
+   ```
+   PRODUCTION_URL=your-new-app.railway.app
+   PRODUCTION_PORT=443
    ```
 
 2. **Update `infra/monitoring/prometheus.yml`** (around line 46):
@@ -50,7 +67,7 @@ You should see Prometheus-formatted metrics output.
      - job_name: 'coordinator'
        static_configs:
          - targets:
-             - 'your-new-app.railway.app:443'  # Update this line
+             - 'your-new-app.railway.app:443'  # Update this line with your URL
    ```
 
 ### Option 2: Use Environment Variables (Advanced)
@@ -87,7 +104,7 @@ scrape_configs:
     scheme: 'https'  # Use https for Railway
     static_configs:
       - targets:
-          - 'ms8-learning-analytics-production.up.railway.app:443'  # Railway URL
+          - 'your-app.railway.app:443'  # Replace with your Railway URL
         labels:
           environment: 'production'  # Production label
 ```
@@ -109,8 +126,8 @@ Before deploying to Railway:
 **Problem**: Target shows as DOWN in Prometheus
 
 **Solutions**:
-1. **Check Railway app is running**: Visit `https://ms8-learning-analytics-production.up.railway.app/health`
-2. **Verify metrics endpoint**: `curl https://ms8-learning-analytics-production.up.railway.app/metrics`
+1. **Check Railway app is running**: Visit `https://your-app.railway.app/health` (replace with your URL)
+2. **Verify metrics endpoint**: `curl https://your-app.railway.app/metrics` (replace with your URL)
 3. **Check TLS config**: Railway uses valid SSL certs, but if issues occur, verify `tls_config` in prometheus.yml
 4. **Check firewall**: Railway should allow external connections, but verify if using private networking
 

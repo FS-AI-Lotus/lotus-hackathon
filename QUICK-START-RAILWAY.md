@@ -1,10 +1,20 @@
 # ⚡ Quick Start - Railway Production Monitoring
 
-## ✅ Current Configuration
+## ⚙️ Quick Configuration
 
-Your Railway URL is **already configured**:
-- **URL**: `ms8-learning-analytics-production.up.railway.app:443`
-- **File**: `infra/monitoring/prometheus.yml`
+**To use your Railway URL**, open `infra/monitoring/prometheus.yml` and find line **45**:
+
+**Find this:**
+```yaml
+- 'YOUR_PRODUCTION_URL_HERE:443'  # ⬅️ CHANGE THIS
+```
+
+**Replace with:**
+```yaml
+- 'ms8-learning-analytics-production.up.railway.app:443'
+```
+
+**That's it!** See `SET-PRODUCTION-URL.md` for detailed instructions.
 
 ## 🚀 Quick Setup
 
@@ -19,24 +29,32 @@ curl https://ms8-learning-analytics-production.up.railway.app/metrics
 
 You should see Prometheus-formatted metrics.
 
-### Step 2: Start Prometheus
+### Step 2: Start Prometheus (Use Docker - Easiest!)
 
-**Option A: Run Prometheus Locally**
-
-```bash
-# Install Prometheus (if not installed)
-# Mac: brew install prometheus
-# Windows: Download from https://prometheus.io/download/
-
-# Start Prometheus with your config
-prometheus --config.file=./infra/monitoring/prometheus.yml
-```
-
-**Option B: Use Docker (Optional)**
+**Since Prometheus isn't installed locally, use Docker:**
 
 ```bash
 npm run monitoring:docker:start
 ```
+
+This starts:
+- ✅ Prometheus (scrapes your Railway app)
+- ✅ Grafana (visualizes metrics)
+
+**Why Docker?**
+- ✅ No installation needed
+- ✅ Already configured
+- ✅ Works immediately
+- ✅ Free (no Railway service costs)
+
+**Alternative: Install Prometheus Locally**
+```bash
+# Mac: brew install prometheus
+# Windows: Download from https://prometheus.io/download/
+# Then: prometheus --config.file=./infra/monitoring/prometheus.yml
+```
+
+**Why not Railway?** See `docs/RAILWAY-PROMETHEUS-OPTIONS.md` for details.
 
 ### Step 3: Access Prometheus
 

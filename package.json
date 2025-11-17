@@ -10,6 +10,7 @@
     "progress:next": "node scripts/progress-tracker.js next"
   },
   "dependencies": {
+    "express": "^5.1.0",
     "express-rate-limit": "^8.2.1",
     "prom-client": "^15.1.3"
   },

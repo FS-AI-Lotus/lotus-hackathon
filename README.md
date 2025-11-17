@@ -34,7 +34,8 @@ npm run progress
 - **`docs/team4-iterations.md`** - Master file with all 9 iteration prompts
 - **`docs/team4-orchestrator.md`** - Guide on how to use the orchestrator
 - **`docs/team4-deliverables-mapping.md`** - Maps hackathon requirements to iterations (ensures 100% coverage)
-- **`docs/team4-initial-survey.md`** - Will be created in Iteration 0 (repo survey)
+- **`docs/team4-initial-survey.md`** - Repository survey (Iteration 0)
+- **`docs/monitoring-setup.md`** - Prometheus metrics setup and usage guide (Iteration 5)
 
 ### 🎨 Philosophy
 
@@ -47,17 +48,24 @@ This orchestrator follows **vibe engineering** principles:
 
 ### 🎯 The 9 Iterations
 
-1. **Iteration 0**: Repo Recon & Test Harness
+1. **Iteration 0**: Repo Recon & Test Harness ✅ **COMPLETE**
 2. **Iteration 1**: Config, Env Validation & Validation Library
 3. **Iteration 2**: Asymmetric JWT Security Core (RS256/ES256)
 4. **Iteration 3**: Attach JWT to Routes + Input Validation & Injection Protection
 5. **Iteration 4**: Centralized Audit Logging & Correlation IDs
-6. **Iteration 5**: Monitoring – Prometheus Metrics & `/metrics` Endpoint
+6. **Iteration 5**: Monitoring – Prometheus Metrics & `/metrics` Endpoint ✅ **COMPLETE**
 7. **Iteration 6**: Prometheus & Grafana Config (Dashboards + Alerts)
 8. **Iteration 7**: Alerts / Notifications, Failure Simulation & Crisis Management
 9. **Iteration 8**: Final Verification & "How to Run" Guide
 
-Each iteration has a clear role, mission, tasks, and style guidelines. Start with Iteration 0!
+Each iteration has a clear role, mission, tasks, and style guidelines.
+
+### ✅ Current Status
+
+- **Iteration 0**: Test framework setup complete (Jest + supertest)
+- **Iteration 5**: Prometheus metrics module, middleware, and `/metrics` endpoint complete
+  - All 37 tests passing ✅
+  - Ready for integration with Coordinator service
 
 ---
 

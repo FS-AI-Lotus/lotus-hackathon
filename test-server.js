@@ -22,11 +22,20 @@ const httpMetricsMiddleware = require('./src/monitoring/httpMetricsMiddleware');
 const metricsEndpoint = require('./src/monitoring/metricsEndpoint');
 const { incrementServiceRegistration, incrementRoutingResult } = require('./src/monitoring/metrics');
 
+// Security middleware
+const authServiceJwtMiddleware = require('./src/security/authServiceJwtMiddleware');
+const { strictRateLimiter, moderateRateLimiter } = require('./src/security/rateLimiter');
+const { validateRegisterMiddleware, validateRouteMiddleware } = require('./src/security/validationMiddleware');
+const { sqlInjectionProtection, promptInjectionDetection } = require('./src/security/injectionProtection');
+
 const app = express();
 app.use(express.json());
 
 // Add metrics middleware (must be before routes)
 app.use(httpMetricsMiddleware);
+
+// Global SQL injection protection (applies to all routes)
+app.use(sqlInjectionProtection);
 
 // In-memory storage for registered services (for testing)
 const registeredServices = new Map();
@@ -46,29 +55,14 @@ app.get('/health', (req, res) => {
 app.get('/metrics', metricsEndpoint);
 
 // Service Registration endpoint
-app.post('/register', (req, res) => {
+// Middleware order: Rate limiting -> JWT auth -> Validation -> Handler
+app.post('/register', 
+  strictRateLimiter,
+  authServiceJwtMiddleware,
+  validateRegisterMiddleware,
+  (req, res) => {
   try {
     const { name, url, schema } = req.body;
-    
-    // Basic validation
-    if (!name || !url) {
-      incrementServiceRegistration('failed');
-      return res.status(400).json({ 
-        error: 'Missing required fields',
-        required: ['name', 'url']
-      });
-    }
-
-    // Validate URL format
-    try {
-      new URL(url);
-    } catch (e) {
-      incrementServiceRegistration('failed');
-      return res.status(400).json({ 
-        error: 'Invalid URL format',
-        url: url
-      });
-    }
 
     // Register service
     const serviceId = `service-${Date.now()}`;
@@ -99,18 +93,15 @@ app.post('/register', (req, res) => {
 });
 
 // Data Routing endpoint
-app.post('/route', (req, res) => {
+// Middleware order: Rate limiting -> JWT auth -> Validation -> Prompt injection protection -> Handler
+app.post('/route',
+  moderateRateLimiter,
+  authServiceJwtMiddleware,
+  validateRouteMiddleware,
+  promptInjectionDetection,
+  (req, res) => {
   try {
     const { origin, destination, data } = req.body;
-    
-    // Basic validation
-    if (!origin || !destination || !data) {
-      incrementRoutingResult('failed');
-      return res.status(400).json({ 
-        error: 'Missing required fields',
-        required: ['origin', 'destination', 'data']
-      });
-    }
 
     // Check if destination service is registered
     const destinationService = Array.from(registeredServices.values())

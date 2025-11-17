@@ -1,0 +1,21 @@
+{
+  "name": "lotus-hackathon",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "progress": "node scripts/progress-tracker.js",
+    "progress:status": "node scripts/progress-tracker.js status",
+    "progress:next": "node scripts/progress-tracker.js next"
+  },
+  "dependencies": {
+    "express-rate-limit": "^8.2.1",
+    "prom-client": "^15.1.3"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.2.0",
+    "supertest": "^7.1.4"
+  }
+}

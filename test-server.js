@@ -227,19 +227,26 @@ if (require.main === module) {
     console.log(`   Route:     http://localhost:${PORT}/route`);
     console.log(`   Services:  http://localhost:${PORT}/services`);
     console.log(`\n💡 Test examples:`);
-    console.log(`   # Health check`);
+    console.log(`   # Health check (public endpoint)`);
     console.log(`   curl http://localhost:${PORT}/health`);
-    console.log(`\n   # Register a service`);
+    console.log(`\n   # Generate JWT token first:`);
+    console.log(`   node scripts/generateServiceJwt.js my-service`);
+    console.log(`\n   # Register a service (requires JWT token)`);
+    console.log(`   TOKEN="<your-jwt-token>"`);
     console.log(`   curl -X POST http://localhost:${PORT}/register \\`);
+    console.log(`     -H "Authorization: Bearer $TOKEN" \\`);
     console.log(`     -H "Content-Type: application/json" \\`);
     console.log(`     -d '{"name":"test-service","url":"http://localhost:3001"}'`);
-    console.log(`\n   # Route data`);
+    console.log(`\n   # Route data (requires JWT token)`);
     console.log(`   curl -X POST http://localhost:${PORT}/route \\`);
+    console.log(`     -H "Authorization: Bearer $TOKEN" \\`);
     console.log(`     -H "Content-Type: application/json" \\`);
     console.log(`     -d '{"origin":"client","destination":"service-123","data":{"key":"value"}}'`);
-    console.log(`\n   # Check metrics`);
+    console.log(`\n   # Check metrics (public endpoint)`);
     console.log(`   curl http://localhost:${PORT}/metrics`);
-    console.log(`\n📊 All requests are automatically tracked in Prometheus metrics!\n`);
+    console.log(`\n📊 All requests are automatically tracked in Prometheus metrics!`);
+    console.log(`🔒 Security: /register and /route require JWT authentication`);
+    console.log(`📝 See docs/monitoring-and-security.md for complete setup guide\n`);
   });
 }
 

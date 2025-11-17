@@ -1,0 +1,168 @@
+# Alertmanager Example Configuration
+#
+# This is an EXAMPLE configuration file for Alertmanager.
+# Replace placeholder values with your actual notification channels.
+# DO NOT commit real credentials, API keys, or webhook URLs.
+#
+# Usage:
+#   1. Copy this file to alertmanager.yml
+#   2. Replace placeholder values with real configuration
+#   3. Store sensitive values in environment variables or secrets management
+#   4. Start Alertmanager: alertmanager --config.file=alertmanager.yml
+
+global:
+  # Resolve timeout for alerts
+  resolve_timeout: 5m
+  
+  # Default notification template (optional)
+  # slack_api_url: '${SLACK_WEBHOOK_URL}'
+  # email_smarthost: '${SMTP_HOST}:${SMTP_PORT}'
+  # email_from: 'alertmanager@example.com'
+
+# Templates for notifications (optional)
+# templates:
+#   - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree for alert routing
+route:
+  # Default receiver
+  receiver: 'default'
+  
+  # Group alerts by these labels
+  group_by: ['alertname', 'cluster', 'service']
+  
+  # Wait time before sending first notification
+  group_wait: 10s
+  
+  # Wait time before sending notification about new alerts in group
+  group_interval: 10s
+  
+  # Minimum time between two notifications for same group
+  repeat_interval: 12h
+  
+  # Route critical alerts to critical receiver
+  routes:
+    # Critical alerts go to critical channel
+    - match:
+        severity: critical
+      receiver: 'critical'
+      continue: false
+    
+    # Warning alerts go to warning channel
+    - match:
+        severity: warning
+      receiver: 'warning'
+      continue: false
+    
+    # Security alerts go to security team
+    - match:
+        component: security
+      receiver: 'security'
+      continue: false
+    
+    # Team 4 alerts
+    - match:
+        team: team4
+      receiver: 'team4'
+      continue: false
+
+# Receivers define where alerts are sent
+receivers:
+  # Default receiver (fallback)
+  - name: 'default'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook'
+        send_resolved: true
+
+  # Critical alerts receiver
+  - name: 'critical'
+    # Example: Slack notification
+    # slack_configs:
+    #   - api_url: '${SLACK_WEBHOOK_URL}'
+    #     channel: '#alerts-critical'
+    #     title: '🚨 CRITICAL Alert: {{ .GroupLabels.alertname }}'
+    #     text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}{{ end }}'
+    #     send_resolved: true
+    
+    # Example: Email notification
+    # email_configs:
+    #   - to: 'oncall@example.com'
+    #     from: 'alertmanager@example.com'
+    #     smarthost: '${SMTP_HOST}:${SMTP_PORT}'
+    #     headers:
+    #       Subject: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+    #     html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
+    
+    # Example: Webhook (for PagerDuty, OpsGenie, etc.)
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook/critical'
+        send_resolved: true
+        http_config:
+          bearer_token: '${WEBHOOK_BEARER_TOKEN}'
+
+  # Warning alerts receiver
+  - name: 'warning'
+    # Example: Slack notification
+    # slack_configs:
+    #   - api_url: '${SLACK_WEBHOOK_URL}'
+    #     channel: '#alerts-warning'
+    #     title: '⚠️ Warning Alert: {{ .GroupLabels.alertname }}'
+    #     text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}{{ end }}'
+    #     send_resolved: true
+    
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook/warning'
+        send_resolved: true
+
+  # Security alerts receiver
+  - name: 'security'
+    # Example: Dedicated security channel
+    # slack_configs:
+    #   - api_url: '${SLACK_WEBHOOK_URL}'
+    #     channel: '#security-alerts'
+    #     title: '🔒 Security Alert: {{ .GroupLabels.alertname }}'
+    #     text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}\nAction: {{ .Annotations.action }}{{ end }}'
+    #     send_resolved: true
+    
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook/security'
+        send_resolved: true
+
+  # Team 4 specific receiver
+  - name: 'team4'
+    # Example: Team-specific channel
+    # slack_configs:
+    #   - api_url: '${SLACK_WEBHOOK_URL}'
+    #     channel: '#team4-alerts'
+    #     title: 'Team 4 Alert: {{ .GroupLabels.alertname }}'
+    #     text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}{{ end }}'
+    #     send_resolved: true
+    
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook/team4'
+        send_resolved: true
+
+# Inhibition rules (suppress alerts when other alerts are firing)
+inhibit_rules:
+  # Suppress warning alerts when critical alert is firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'cluster', 'service']
+  
+  # Suppress all alerts when CoordinatorDown is firing
+  - source_match:
+      alertname: 'CoordinatorDown'
+    target_match_re:
+      alertname: '.*'
+    equal: ['cluster', 'service']
+
+# Notes:
+# - Replace all ${VARIABLE} placeholders with actual values or environment variables
+# - For production, use secrets management (e.g., Kubernetes secrets, HashiCorp Vault)
+# - Test webhook URLs before deploying
+# - Configure proper authentication for webhooks
+# - Set up proper monitoring for Alertmanager itself
+# - Consider using Alertmanager's clustering for high availability
+

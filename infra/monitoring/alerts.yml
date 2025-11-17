@@ -1,0 +1,304 @@
+# Prometheus Alert Rules for Coordinator Service
+#
+# This file defines alerting rules for both service failures and security violations.
+# Alerts are evaluated every 15 seconds (matching evaluation_interval in prometheus.yml).
+#
+# Thresholds can be tuned based on actual SLO requirements:
+# - Warning thresholds: Early indicators of potential issues
+# - Critical thresholds: Immediate action required
+
+groups:
+  - name: coordinator_service_failures
+    interval: 15s
+    rules:
+      # Service Availability
+      - alert: CoordinatorDown
+        expr: up{job="coordinator"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: team4
+          component: coordinator
+        annotations:
+          summary: "Coordinator service is down"
+          description: "Coordinator service has been down for more than 2 minutes. Service is not responding to health checks."
+          runbook_url: "https://docs.example.com/runbooks/coordinator-down"
+          action: "Check service logs, verify deployment status, check network connectivity"
+
+      # Error Rate
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{service="coordinator",status=~"5.."}[5m])) by (route, method)
+            /
+            sum(rate(http_requests_total{service="coordinator"}[5m])) by (route, method)
+          ) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+          team: team4
+          component: coordinator
+        annotations:
+          summary: "High error rate detected on {{ $labels.route }}"
+          description: "Error rate is {{ $value | humanizePercentage }}% for route {{ $labels.route }} (method: {{ $labels.method }}) over the last 5 minutes. Threshold: 5%"
+          runbook_url: "https://docs.example.com/runbooks/high-error-rate"
+          action: "Check application logs for errors, review recent deployments, check downstream dependencies"
+
+      - alert: HighErrorRateCritical
+        expr: |
+          (
+            sum(rate(http_requests_total{service="coordinator",status=~"5.."}[5m])) by (route, method)
+            /
+            sum(rate(http_requests_total{service="coordinator"}[5m])) by (route, method)
+          ) * 100 > 10
+        for: 2m
+        labels:
+          severity: critical
+          team: team4
+          component: coordinator
+        annotations:
+          summary: "CRITICAL: Very high error rate on {{ $labels.route }}"
+          description: "Error rate is {{ $value | humanizePercentage }}% for route {{ $labels.route }} (method: {{ $labels.method }}) over the last 2 minutes. Threshold: 10%"
+          runbook_url: "https://docs.example.com/runbooks/high-error-rate"
+          action: "IMMEDIATE: Check logs, consider rollback, notify on-call engineer"
+
+      # Latency (p95)
+      - alert: HighLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{service="coordinator"}[5m])) by (le, route, method)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+          team: team4
+          component: coordinator
+        annotations:
+          summary: "High p95 latency on {{ $labels.route }}"
+          description: "p95 latency is {{ $value }}s for route {{ $labels.route }} (method: {{ $labels.method }}) over the last 5 minutes. Threshold: 2s"
+          runbook_url: "https://docs.example.com/runbooks/high-latency"
+          action: "Check database queries, external API calls, check for resource constraints (CPU/memory)"
+
+      - alert: HighLatencyP95Critical
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{service="coordinator"}[5m])) by (le, route, method)
+          ) > 5
+        for: 2m
+        labels:
+          severity: critical
+          team: team4
+          component: coordinator
+        annotations:
+          summary: "CRITICAL: Very high p95 latency on {{ $labels.route }}"
+          description: "p95 latency is {{ $value }}s for route {{ $labels.route }} (method: {{ $labels.method }}) over the last 2 minutes. Threshold: 5s"
+          runbook_url: "https://docs.example.com/runbooks/high-latency"
+          action: "IMMEDIATE: Check for database locks, slow queries, external service degradation"
+
+      # Service Registration Failures
+      - alert: RegistrationFailures
+        expr: |
+          rate(coordinator_service_registrations_total{status="failed"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: team4
+          component: coordinator
+        annotations:
+          summary: "High rate of service registration failures"
+          description: "Service registration failure rate is {{ $value }} failures/second over the last 5 minutes. Threshold: 0.1 failures/sec"
+          runbook_url: "https://docs.example.com/runbooks/registration-failures"
+          action: "Check registration validation logic, review schema validation, check database connectivity"
+
+      - alert: RegistrationFailuresCritical
+        expr: |
+          rate(coordinator_service_registrations_total{status="failed"}[2m]) > 0.5
+        for: 2m
+        labels:
+          severity: critical
+          team: team4
+          component: coordinator
+        annotations:
+          summary: "CRITICAL: Very high rate of service registration failures"
+          description: "Service registration failure rate is {{ $value }} failures/second over the last 2 minutes. Threshold: 0.5 failures/sec"
+          runbook_url: "https://docs.example.com/runbooks/registration-failures"
+          action: "IMMEDIATE: Check database schema, validation rules, service connectivity"
+
+      # Routing Operation Failures
+      - alert: RoutingFailures
+        expr: |
+          rate(coordinator_routing_operations_total{status="failed"}[5m]) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          team: team4
+          component: coordinator
+        annotations:
+          summary: "High rate of routing operation failures"
+          description: "Routing operation failure rate is {{ $value }} failures/second over the last 5 minutes. Threshold: 0.2 failures/sec"
+          runbook_url: "https://docs.example.com/runbooks/routing-failures"
+          action: "Check routing logic, verify target service availability, check network connectivity"
+
+      - alert: RoutingFailuresCritical
+        expr: |
+          rate(coordinator_routing_operations_total{status="failed"}[2m]) > 1.0
+        for: 2m
+        labels:
+          severity: critical
+          team: team4
+          component: coordinator
+        annotations:
+          summary: "CRITICAL: Very high rate of routing operation failures"
+          description: "Routing operation failure rate is {{ $value }} failures/second over the last 2 minutes. Threshold: 1.0 failures/sec"
+          runbook_url: "https://docs.example.com/runbooks/routing-failures"
+          action: "IMMEDIATE: Check target services, network issues, routing configuration"
+
+  - name: coordinator_security_violations
+    interval: 15s
+    rules:
+      # Authentication Failures
+      # Note: This alert requires auth failure metrics to be exposed
+      # For now, we'll use a placeholder that can be updated when auth metrics are available
+      - alert: HighAuthFailureRate
+        expr: |
+          # Placeholder: Update when auth failure metrics are available
+          # Example: rate(auth_failures_total{service="coordinator"}[1m]) > 10
+          # For now, using a condition that will be updated in Iteration 4/7
+          0 > 10
+        for: 1m
+        labels:
+          severity: warning
+          team: team4
+          component: security
+        annotations:
+          summary: "High authentication failure rate detected"
+          description: "Authentication failure rate is {{ $value }} failures/minute. Threshold: 10 failures/min. This may indicate brute force attempts or misconfigured clients."
+          runbook_url: "https://docs.example.com/runbooks/auth-failures"
+          action: "Review auth logs, check for suspicious IPs, verify JWT configuration"
+        # TODO: Update this alert when auth metrics are implemented in Iteration 4
+
+      - alert: HighAuthFailureRateCritical
+        expr: |
+          # Placeholder: Update when auth failure metrics are available
+          0 > 50
+        for: 1m
+        labels:
+          severity: critical
+          team: team4
+          component: security
+        annotations:
+          summary: "CRITICAL: Very high authentication failure rate"
+          description: "Authentication failure rate is {{ $value }} failures/minute. Threshold: 50 failures/min. Likely attack in progress."
+          runbook_url: "https://docs.example.com/runbooks/auth-failures"
+          action: "IMMEDIATE: Review security logs, consider blocking suspicious IPs, notify security team"
+        # TODO: Update this alert when auth metrics are implemented in Iteration 4
+
+      # Rate Limit Violations
+      # Note: This alert requires rate limit violation metrics to be exposed
+      - alert: RateLimitExceeded
+        expr: |
+          # Placeholder: Update when rate limit metrics are available
+          # Example: rate(rate_limit_violations_total{service="coordinator"}[1m]) > 5
+          0 > 5
+        for: 1m
+        labels:
+          severity: warning
+          team: team4
+          component: security
+        annotations:
+          summary: "Sustained rate limit violations detected"
+          description: "Rate limit violation rate is {{ $value }} violations/minute. Threshold: 5 violations/min. This may indicate abuse or misconfigured clients."
+          runbook_url: "https://docs.example.com/runbooks/rate-limit-violations"
+          action: "Review rate limit configuration, check for legitimate traffic patterns, consider adjusting limits"
+        # TODO: Update this alert when rate limit metrics are implemented in Iteration 3
+
+      - alert: RateLimitExceededCritical
+        expr: |
+          # Placeholder: Update when rate limit metrics are available
+          0 > 20
+        for: 1m
+        labels:
+          severity: critical
+          team: team4
+          component: security
+        annotations:
+          summary: "CRITICAL: Very high rate limit violation rate"
+          description: "Rate limit violation rate is {{ $value }} violations/minute. Threshold: 20 violations/min. Likely DDoS or abuse attack."
+          runbook_url: "https://docs.example.com/runbooks/rate-limit-violations"
+          action: "IMMEDIATE: Review security logs, consider blocking IPs, enable DDoS protection, notify security team"
+        # TODO: Update this alert when rate limit metrics are implemented in Iteration 3
+
+      # Suspicious Activity
+      # Note: This alert requires security event metrics/logs
+      - alert: SuspiciousActivity
+        expr: |
+          # Placeholder: Update when security event metrics are available
+          # Example: count by (ip, serviceId) (security_events_total{service="coordinator"}[5m]) > 10
+          0 > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: team4
+          component: security
+        annotations:
+          summary: "Suspicious activity detected from {{ $labels.ip }} or service {{ $labels.serviceId }}"
+          description: "Multiple security events ({{ $value }}) detected from the same source over the last 5 minutes. Threshold: 10 events"
+          runbook_url: "https://docs.example.com/runbooks/suspicious-activity"
+          action: "Review security logs, check for patterns, consider blocking source if confirmed malicious"
+        # TODO: Update this alert when security event metrics are implemented in Iteration 4
+
+      # Injection Attempts
+      # Note: This alert requires injection detection metrics/logs
+      - alert: InjectionAttempts
+        expr: |
+          # Placeholder: Update when injection detection metrics are available
+          # Example: rate(injection_attempts_total{service="coordinator",type=~"sql|prompt"}[5m]) > 0.1
+          0 > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: team4
+          component: security
+        annotations:
+          summary: "Injection attempt detected ({{ $labels.type }})"
+          description: "Injection attempt rate is {{ $value }} attempts/second for type {{ $labels.type }} over the last 5 minutes. Threshold: 0.1 attempts/sec"
+          runbook_url: "https://docs.example.com/runbooks/injection-attempts"
+          action: "Review security logs, check validation rules, verify input sanitization, consider blocking source"
+        # TODO: Update this alert when injection detection metrics are implemented in Iteration 3/4
+
+      - alert: InjectionAttemptsCritical
+        expr: |
+          # Placeholder: Update when injection detection metrics are available
+          0 > 1.0
+        for: 2m
+        labels:
+          severity: critical
+          team: team4
+          component: security
+        annotations:
+          summary: "CRITICAL: High rate of injection attempts"
+          description: "Injection attempt rate is {{ $value }} attempts/second over the last 2 minutes. Threshold: 1.0 attempts/sec. Active attack likely in progress."
+          runbook_url: "https://docs.example.com/runbooks/injection-attempts"
+          action: "IMMEDIATE: Review security logs, block source IPs, verify all inputs are sanitized, notify security team"
+        # TODO: Update this alert when injection detection metrics are implemented in Iteration 3/4
+
+# Threshold Tuning Guide:
+#
+# Service Failure Thresholds:
+# - HighErrorRate: 5% (warning), 10% (critical) - Adjust based on SLO (e.g., 99.9% success rate = 0.1% error rate)
+# - HighLatencyP95: 2s (warning), 5s (critical) - Adjust based on expected response times
+# - RegistrationFailures: 0.1/sec (warning), 0.5/sec (critical) - Adjust based on expected registration volume
+# - RoutingFailures: 0.2/sec (warning), 1.0/sec (critical) - Adjust based on expected routing volume
+#
+# Security Violation Thresholds:
+# - HighAuthFailureRate: 10/min (warning), 50/min (critical) - Adjust based on expected auth volume
+# - RateLimitExceeded: 5/min (warning), 20/min (critical) - Adjust based on rate limit configuration
+# - SuspiciousActivity: 10 events/5min - Adjust based on baseline activity
+# - InjectionAttempts: 0.1/sec (warning), 1.0/sec (critical) - Any injection attempt is suspicious
+#
+# To tune thresholds:
+# 1. Monitor metrics for 1-2 weeks to establish baseline
+# 2. Set warning thresholds at 2-3x baseline
+# 3. Set critical thresholds at 5-10x baseline
+# 4. Review and adjust based on alert frequency and false positive rate
+

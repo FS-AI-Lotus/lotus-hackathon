@@ -98,8 +98,8 @@ function Start-Monitoring {
     Write-Success "Monitoring stack started!"
     Write-Host ""
     Write-Info "Services:"
-    Write-Host "  📊 Prometheus: http://localhost:9090"
-    Write-Host "  📈 Grafana:    http://localhost:3001 (admin/admin)"
+        Write-Host "  📊 Prometheus: http://localhost:9090"
+        Write-Host "  📈 Grafana:    http://localhost:4000 (admin/admin)"
     Write-Host ""
     Write-Info "Waiting for services to be ready..."
     Start-Sleep -Seconds 5
@@ -149,8 +149,8 @@ function Test-Services {
     }
     
     try {
-        $response = Invoke-WebRequest -Uri "http://localhost:3001/api/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
-        Write-Success "Grafana is running (http://localhost:3001)"
+        $response = Invoke-WebRequest -Uri "http://localhost:4000/api/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+        Write-Success "Grafana is running (http://localhost:4000)"
     } catch {
         Write-Warning "Grafana may still be starting up..."
     }

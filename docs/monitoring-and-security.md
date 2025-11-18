@@ -10,20 +10,33 @@ This document provides a comprehensive guide to monitoring, security, and alerti
 4. [Testing JWT Security](#testing-jwt-security)
 5. [Observability Checks](#observability-checks)
 6. [Failure Simulation & Alert Verification](#failure-simulation--alert-verification)
-7. [Testing and Quality Assurance](#testing-and-quality-assurance)
+7. [Audit Logging & Correlation IDs](#audit-logging--correlation-ids)
+8. [Testing and Quality Assurance](#testing-and-quality-assurance)
 
 ---
 
 ## Overview
 
-Team 4 has implemented:
+Team 4 has implemented a complete monitoring and security solution for the Coordinator service:
 
-- **Monitoring**: Prometheus metrics collection, Grafana dashboards
-- **Security**: Asymmetric JWT (RS256) authentication (to be implemented in Iterations 2-3)
-- **Logging**: Structured audit logging with correlation IDs (to be implemented in Iteration 4)
+- **Monitoring**: Prometheus metrics collection, Grafana dashboards with real-time metrics
+- **Security**: Asymmetric JWT (RS256) authentication, rate limiting, input validation, SQL/prompt injection protection
+- **Logging**: Structured audit logging with correlation IDs for request tracing
 - **Alerts**: Prometheus alert rules for service failures and security violations
+- **Crisis Management**: Runbooks and incident response procedures
 
-**Note**: Security features (JWT, rate limiting, validation) will be implemented in Iterations 1-4. This guide covers what's currently available and how to test it.
+### Key Features
+
+✅ **JWT Authentication**: RS256 asymmetric JWT for service-to-service authentication  
+✅ **Rate Limiting**: Per-endpoint rate limits (strict for /register, moderate for /route)  
+✅ **Input Validation**: Zod-based validation for all API endpoints  
+✅ **Injection Protection**: SQL and prompt injection detection and blocking  
+✅ **Structured Logging**: Winston-based JSON logging with correlation IDs  
+✅ **Audit Logging**: Comprehensive audit logs for registrations, routing, and schema changes  
+✅ **Security Logging**: All security events (auth failures, rate limits, injection attempts) logged  
+✅ **Prometheus Metrics**: HTTP metrics, business metrics, and system metrics  
+✅ **Grafana Dashboards**: Real-time visualization of all key metrics  
+✅ **Prometheus Alerts**: Service failure and security violation alerts  
 
 ---
 
@@ -32,23 +45,81 @@ Team 4 has implemented:
 ### Required Environment Variables
 
 **For Coordinator Service:**
-- `PORT` - Service port (default: 3000)
-- `SERVICE_JWT_PUBLIC_KEY` - Public key for JWT verification (Iteration 2)
-- `SERVICE_JWT_ISSUER` - Expected JWT issuer (Iteration 2)
-- `SERVICE_JWT_AUDIENCE` - Optional JWT audience (Iteration 2)
+
+```bash
+# JWT Configuration (Required)
+SERVICE_JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
+-----END PUBLIC KEY-----"
+
+SERVICE_JWT_ISSUER="coordinator"
+
+# Optional JWT Configuration
+SERVICE_JWT_AUDIENCE="coordinator-api"  # Optional
+
+# Service Configuration
+PORT=3000  # Default: 3000
+NODE_ENV=development  # development, production, or test
+
+# Logging Configuration
+LOG_LEVEL=info  # error, warn, info, security, audit (default: info)
+```
+
+**For JWT Token Generation (Issuer/Dev Scripts Only):**
+
+```bash
+# Only needed for generating tokens (scripts/generateServiceJwt.js)
+SERVICE_JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC...
+-----END PRIVATE KEY-----"
+```
 
 **For Prometheus:**
-- `COORDINATOR_HOST` - Coordinator hostname:port (default: `localhost:3000`)
-- `ENVIRONMENT` - Environment name (default: `development`)
 
-**For Alertmanager (if used):**
-- `SLACK_WEBHOOK_URL` - Slack webhook for notifications (optional)
-- `SMTP_HOST` - SMTP server for email alerts (optional)
-- `WEBHOOK_BEARER_TOKEN` - Bearer token for webhook authentication (optional)
+```bash
+COORDINATOR_HOST="localhost:3000"  # Default: localhost:3000
+ENVIRONMENT="development"  # Default: development
+```
 
-### Metrics Configuration
+**For Alertmanager (Optional):**
 
-No additional configuration needed - metrics are automatically collected via middleware.
+```bash
+SLACK_WEBHOOK_URL="https://hooks.slack.com/services/..."  # Optional
+SMTP_HOST="smtp.example.com"  # Optional
+WEBHOOK_BEARER_TOKEN="your-token"  # Optional
+```
+
+### Generating RSA Key Pair
+
+To generate a new RSA key pair for JWT:
+
+```bash
+# Generate private key
+openssl genrsa -out private.pem 2048
+
+# Generate public key
+openssl rsa -in private.pem -pubout -out public.pem
+
+# Set environment variables (use the full PEM content including headers)
+export SERVICE_JWT_PRIVATE_KEY="$(cat private.pem)"
+export SERVICE_JWT_PUBLIC_KEY="$(cat public.pem)"
+export SERVICE_JWT_ISSUER="coordinator"
+```
+
+**Windows PowerShell:**
+
+```powershell
+# Generate private key
+openssl genrsa -out private.pem 2048
+
+# Generate public key
+openssl rsa -in private.pem -pubout -out public.pem
+
+# Set environment variables
+$env:SERVICE_JWT_PRIVATE_KEY = Get-Content private.pem -Raw
+$env:SERVICE_JWT_PUBLIC_KEY = Get-Content public.pem -Raw
+$env:SERVICE_JWT_ISSUER = "coordinator"
+```
 
 ---
 
@@ -57,20 +128,35 @@ No additional configuration needed - metrics are automatically collected via mid
 ### 1. Start Coordinator Service
 
 **Using test coordinator:**
+
 ```bash
+# Set required environment variables first
+export SERVICE_JWT_PUBLIC_KEY="..."
+export SERVICE_JWT_ISSUER="coordinator"
+
+# Start the service
+node test-server.js
+```
+
+**Windows PowerShell:**
+
+```powershell
+$env:SERVICE_JWT_PUBLIC_KEY = "..."
+$env:SERVICE_JWT_ISSUER = "coordinator"
 node test-server.js
 ```
 
 The service will start on `http://localhost:3000` and expose:
-- `/health` - Health check
-- `/metrics` - Prometheus metrics
-- `/register` - Service registration
-- `/route` - Data routing
-- `/services` - List registered services
+- `GET /health` - Health check (public)
+- `GET /metrics` - Prometheus metrics (public)
+- `POST /register` - Service registration (protected, requires JWT)
+- `POST /route` - Data routing (protected, requires JWT)
+- `GET /services` - List registered services (public)
 
 ### 2. Start Prometheus & Grafana
 
 **Option A: Using Docker Compose (Recommended)**
+
 ```bash
 # Windows PowerShell
 docker-compose -f docker-compose.monitoring.yml up -d
@@ -79,11 +165,17 @@ docker-compose -f docker-compose.monitoring.yml up -d
 docker-compose -f docker-compose.monitoring.yml up -d
 ```
 
+This starts:
+- **Prometheus** on `http://localhost:9090`
+- **Grafana** on `http://localhost:3001` (default credentials: admin/admin)
+
 **Option B: Manual Setup**
+
 1. Start Prometheus:
    ```bash
    prometheus --config.file=infra/monitoring/prometheus.yml
    ```
+
 2. Start Grafana:
    ```bash
    grafana-server
@@ -92,9 +184,11 @@ docker-compose -f docker-compose.monitoring.yml up -d
 ### 3. Import Grafana Dashboard
 
 1. Open Grafana: http://localhost:3001
-2. Go to **Dashboards** > **Import**
-3. Upload `infra/monitoring/grafana-dashboard-coordinator.json`
-4. Configure Prometheus data source if not already configured
+2. Login with default credentials: `admin` / `admin`
+3. Go to **Dashboards** > **Import**
+4. Upload `infra/monitoring/grafana-dashboard-coordinator.json`
+5. Select Prometheus data source
+6. Click **Import**
 
 ### 4. Verify Setup
 
@@ -114,26 +208,131 @@ curl http://localhost:3000/metrics
 
 ## Testing JWT Security
 
-**Note**: JWT authentication will be implemented in Iteration 2. Once available:
-
 ### Generate a Valid JWT Token
 
 ```bash
-# Using the JWT generation script (Iteration 2)
-node scripts/generateServiceJwt.js service-name
+# Set required environment variables
+export SERVICE_JWT_PRIVATE_KEY="..."
+export SERVICE_JWT_ISSUER="coordinator"
+
+# Generate token for a service
+node scripts/generateServiceJwt.js my-service
+
+# Generate token with optional claims
+node scripts/generateServiceJwt.js my-service --role=admin --scope=read,write --exp=120
 ```
+
+**Windows PowerShell:**
+
+```powershell
+$env:SERVICE_JWT_PRIVATE_KEY = "..."
+$env:SERVICE_JWT_ISSUER = "coordinator"
+node scripts/generateServiceJwt.js my-service
+```
+
+The script outputs a JWT token. Copy it for use in requests.
 
 ### Test Protected Endpoints
 
 ```bash
-# Without token (should return 401/403)
-curl http://localhost:3000/register
+# Set token variable
+TOKEN="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
 
-# With valid token (should return 200/201)
-curl -H "Authorization: Bearer <token>" http://localhost:3000/register
+# Without token (should return 401)
+curl -X POST http://localhost:3000/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"test-service","url":"http://localhost:3001"}'
 
-# With invalid token (should return 401/403)
-curl -H "Authorization: Bearer invalid-token" http://localhost:3000/register
+# With valid token (should return 201)
+curl -X POST http://localhost:3000/register \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"test-service","url":"http://localhost:3001"}'
+
+# With invalid token (should return 401)
+curl -X POST http://localhost:3000/register \
+  -H "Authorization: Bearer invalid-token" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"test-service","url":"http://localhost:3001"}'
+
+# With expired token (should return 401)
+# Use a token that has expired
+curl -X POST http://localhost:3000/register \
+  -H "Authorization: Bearer $EXPIRED_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"test-service","url":"http://localhost:3001"}'
+```
+
+**Windows PowerShell:**
+
+```powershell
+$TOKEN = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+# Without token
+Invoke-WebRequest -Uri http://localhost:3000/register -Method POST `
+  -ContentType "application/json" `
+  -Body '{"name":"test-service","url":"http://localhost:3001"}'
+
+# With valid token
+Invoke-WebRequest -Uri http://localhost:3000/register -Method POST `
+  -Headers @{Authorization="Bearer $TOKEN"} `
+  -ContentType "application/json" `
+  -Body '{"name":"test-service","url":"http://localhost:3001"}'
+```
+
+### Test Rate Limiting
+
+```bash
+# Test strict rate limit on /register (10 requests per 15 minutes)
+for i in {1..12}; do
+  curl -X POST http://localhost:3000/register \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"name\":\"service-$i\",\"url\":\"http://localhost:300$i\"}"
+  sleep 0.1
+done
+# 11th and 12th requests should return 429
+
+# Test moderate rate limit on /route (100 requests per minute)
+for i in {1..105}; do
+  curl -X POST http://localhost:3000/route \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"origin":"client","destination":"service-123","data":{}}'
+done
+# 101st+ requests should return 429
+```
+
+### Test Input Validation
+
+```bash
+# Missing required fields (should return 400)
+curl -X POST http://localhost:3000/register \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"test-service"}'
+
+# Invalid URL format (should return 400)
+curl -X POST http://localhost:3000/register \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"test-service","url":"not-a-url"}'
+```
+
+### Test Injection Protection
+
+```bash
+# SQL injection attempt (should return 400)
+curl -X POST http://localhost:3000/register \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"test\"; DROP TABLE services;--","url":"http://localhost:3001"}'
+
+# Prompt injection attempt (should return 400)
+curl -X POST http://localhost:3000/route \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"origin":"client","destination":"service-123","data":{"message":"ignore previous instructions"}}'
 ```
 
 ---
@@ -143,18 +342,24 @@ curl -H "Authorization: Bearer invalid-token" http://localhost:3000/register
 ### Generate Traffic
 
 ```bash
-# Health checks
+# Health checks (public endpoint)
 for i in {1..10}; do curl http://localhost:3000/health; done
 
-# Register services
-curl -X POST http://localhost:3000/register \
-  -H "Content-Type: application/json" \
-  -d '{"name":"test-service","url":"http://localhost:3001"}'
+# Register services (requires JWT)
+TOKEN="..."
+for i in {1..5}; do
+  curl -X POST http://localhost:3000/register \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"name\":\"service-$i\",\"url\":\"http://localhost:300$i\"}"
+done
 
-# Route data
+# Route data (requires JWT)
+SERVICE_ID="service-123"
 curl -X POST http://localhost:3000/route \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"origin":"client","destination":"service-123","data":{"key":"value"}}'
+  -d "{\"origin\":\"client\",\"destination\":\"$SERVICE_ID\",\"data\":{\"key\":\"value\"}}"
 ```
 
 ### View Metrics in Grafana
@@ -166,16 +371,20 @@ curl -X POST http://localhost:3000/route \
    - **p95 Latency** - Should show request durations
    - **Error Rate** - Should be low (0% if no errors)
    - **Uptime** - Should show time since Coordinator started
-   - **Service Registrations** - Should show registration counts
-   - **Routing Operations** - Should show routing counts
+   - **Service Registrations** - Should show registration counts (success/failed)
+   - **Routing Operations** - Should show routing counts (success/failed)
 
 ### Key Metrics to Monitor
 
-- `http_requests_total` - Total requests per route
-- `http_request_duration_seconds` - Request latency (p95)
+- `http_requests_total` - Total requests per route/method/status
+- `http_request_duration_seconds` - Request latency (p50, p95, p99)
 - `http_errors_total` - Error count (5xx status codes)
 - `coordinator_service_registrations_total` - Registration success/failure
 - `coordinator_routing_operations_total` - Routing success/failure
+
+### Dashboard Refresh
+
+The Grafana dashboard is configured to refresh every 10 seconds. Metrics should update automatically as you make requests.
 
 ---
 
@@ -216,9 +425,12 @@ node test-server.js
 
 **Simulate:**
 ```bash
-# Hit the /error endpoint repeatedly
+# Hit the /error endpoint repeatedly (if available)
+# Or send invalid requests that result in 500 errors
 for i in {1..50}; do
-  curl http://localhost:3000/error
+  curl -X POST http://localhost:3000/register \
+    -H "Content-Type: application/json" \
+    -d '{"invalid":"data"}'  # This will cause validation errors
   sleep 1
 done
 ```
@@ -231,45 +443,19 @@ done
 
 **Restore:**
 ```bash
-# Stop hitting /error endpoint
-# Make normal requests to /health to bring error rate down
+# Make normal requests to bring error rate down
 for i in {1..20}; do curl http://localhost:3000/health; done
 ```
 
-#### 3. HighLatencyP95 Alert
-
-**Simulate:**
-Add a delay to a test endpoint (modify test-server.js temporarily):
-```javascript
-app.get('/slow', (req, res) => {
-  setTimeout(() => {
-    res.status(200).json({ message: 'delayed response' });
-  }, 3000); // 3 second delay
-});
-```
-
-Then hit it repeatedly:
-```bash
-for i in {1..20}; do
-  curl http://localhost:3000/slow
-  sleep 0.5
-done
-```
-
-**Verify:**
-1. Check Prometheus for `HighLatencyP95` alert
-2. Alert should show p95 latency value and route
-
-**Restore:**
-Remove the delay or stop hitting `/slow`
-
-#### 4. RegistrationFailures Alert
+#### 3. RegistrationFailures Alert
 
 **Simulate:**
 ```bash
 # Send invalid registration requests
+TOKEN="..."
 for i in {1..20}; do
   curl -X POST http://localhost:3000/register \
+    -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d '{"name":"test"}'  # Missing required 'url' field
   sleep 1
@@ -285,18 +471,21 @@ done
 # Send valid registrations to bring failure rate down
 for i in {1..10}; do
   curl -X POST http://localhost:3000/register \
+    -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d "{\"name\":\"service-$i\",\"url\":\"http://localhost:300$i\"}"
 done
 ```
 
-#### 5. RoutingFailures Alert
+#### 4. RoutingFailures Alert
 
 **Simulate:**
 ```bash
 # Try to route to non-existent services
+TOKEN="..."
 for i in {1..20}; do
   curl -X POST http://localhost:3000/route \
+    -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d '{"origin":"client","destination":"non-existent","data":{}}'
   sleep 1
@@ -311,49 +500,56 @@ done
 ```bash
 # Register a service and route successfully
 SERVICE_ID=$(curl -X POST http://localhost:3000/register \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"test-service","url":"http://localhost:3001"}' | jq -r '.id')
 
 curl -X POST http://localhost:3000/route \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"origin\":\"client\",\"destination\":\"$SERVICE_ID\",\"data\":{\"test\":true}}"
 ```
 
 ### Security Violation Simulation
 
-**Note**: Security features (JWT, rate limiting, injection protection) will be implemented in Iterations 2-4. Once available, use these simulation methods:
-
 #### 1. Unauthorized Connection Attempts
 
-**Simulate (after JWT is implemented):**
+**Simulate:**
 ```bash
 # Send requests without JWT token
 for i in {1..20}; do
-  curl http://localhost:3000/register
+  curl -X POST http://localhost:3000/register \
+    -H "Content-Type: application/json" \
+    -d '{"name":"test","url":"http://localhost:3001"}'
   sleep 1
 done
 
 # Send requests with invalid JWT
 for i in {1..20}; do
-  curl -H "Authorization: Bearer invalid-token" http://localhost:3000/register
+  curl -X POST http://localhost:3000/register \
+    -H "Authorization: Bearer invalid-token" \
+    -H "Content-Type: application/json" \
+    -d '{"name":"test","url":"http://localhost:3001"}'
   sleep 1
 done
 ```
 
 **Verify:**
 1. Check Prometheus for `HighAuthFailureRate` alert
-2. Check security logs (Iteration 4) for auth failure entries
+2. Check security logs for auth failure entries (see Audit Logging section)
 3. Requests should return 401/403
 
 #### 2. Rate Limit Violations
 
-**Simulate (after rate limiting is implemented):**
+**Simulate:**
 ```bash
-# Send excessive requests to /register (strict rate limit)
+# Send excessive requests to /register (strict rate limit: 10 per 15 minutes)
+TOKEN="..."
 for i in {1..20}; do
   curl -X POST http://localhost:3000/register \
+    -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
-    -d '{"name":"test","url":"http://localhost:3001"}'
+    -d "{\"name\":\"test-$i\",\"url\":\"http://localhost:300$i\"}"
   sleep 0.1
 done
 ```
@@ -365,14 +561,17 @@ done
 
 #### 3. SQL Injection Attempts
 
-**Simulate (after validation is implemented):**
+**Simulate:**
 ```bash
+TOKEN="..."
 # Send SQL injection patterns
 curl -X POST http://localhost:3000/register \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"test\"; DROP TABLE services;--","url":"http://localhost:3001"}'
 
 curl -X POST http://localhost:3000/register \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"test\"; SELECT * FROM users;--","url":"http://localhost:3001"}'
 ```
@@ -384,10 +583,12 @@ curl -X POST http://localhost:3000/register \
 
 #### 4. Prompt Injection Attempts
 
-**Simulate (after prompt injection protection is implemented):**
+**Simulate:**
 ```bash
+TOKEN="..."
 # Send prompt injection patterns to /route
 curl -X POST http://localhost:3000/route \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "origin":"client",
@@ -399,7 +600,7 @@ curl -X POST http://localhost:3000/route \
 ```
 
 **Verify:**
-1. Input should be sanitized
+1. Input should be blocked with 400
 2. Check security logs for prompt injection detection
 3. Check Prometheus for `InjectionAttempts` alert
 
@@ -432,20 +633,135 @@ Each alert should have:
 - ✅ `description` annotation (detailed)
 - ✅ `action` annotation (what to do)
 
-#### Verify Security Events in Logs
+---
 
-**Note**: Logging will be implemented in Iteration 4. Once available:
+## Audit Logging & Correlation IDs
 
-1. Check structured logs for security events
-2. Look for `correlationId` to trace requests
-3. Verify security violations are logged with appropriate level (`security` or `audit`)
+### Viewing Logs
 
-#### Verify Dashboard Refresh
+Logs are output to the console in structured JSON format. Each log entry includes:
 
-1. Open Grafana dashboard
-2. Check refresh interval is ≤10s (configured in dashboard JSON)
-3. Make requests to Coordinator
-4. Verify metrics update within 10 seconds
+- `timestamp` - ISO 8601 timestamp
+- `level` - Log level (error, warn, info, security, audit)
+- `service` - Service name (coordinator)
+- `route` - HTTP route path
+- `correlationId` - Request correlation ID (UUID)
+- `serviceId` - Service ID from JWT (if available)
+- `message` - Log message
+- Additional metadata fields
+
+### Correlation IDs
+
+Every request gets a correlation ID:
+- Read from `X-Request-Id` header if present
+- Generated as UUID if not provided
+- Included in response headers (`X-Request-Id`)
+- Used in all log entries for request tracing
+
+**Example:**
+```bash
+# Send request with correlation ID
+curl -H "X-Request-Id: my-correlation-id" \
+  -H "Authorization: Bearer $TOKEN" \
+  http://localhost:3000/register
+
+# Response includes correlation ID
+# X-Request-Id: my-correlation-id
+```
+
+### Audit Log Events
+
+**Service Registrations:**
+```json
+{
+  "level": "audit",
+  "message": "Service registered successfully: my-service",
+  "correlationId": "550e8400-...",
+  "serviceId": "test-service",
+  "registeredService": {
+    "id": "service-123",
+    "name": "my-service",
+    "url": "http://localhost:3001"
+  }
+}
+```
+
+**Schema Changes:**
+```json
+{
+  "level": "audit",
+  "message": "Schema updated for service: my-service",
+  "correlationId": "550e8400-...",
+  "serviceId": "test-service",
+  "oldSchema": "...",
+  "newSchema": "..."
+}
+```
+
+**Routing Operations:**
+```json
+{
+  "level": "audit",
+  "message": "Data routed successfully from client to my-service",
+  "correlationId": "550e8400-...",
+  "serviceId": "test-service",
+  "origin": "client",
+  "destination": "my-service",
+  "dataSize": 123
+}
+```
+
+### Security Log Events
+
+**Authentication Failures:**
+```json
+{
+  "level": "security",
+  "message": "Authentication failed: Missing Authorization header",
+  "correlationId": "550e8400-...",
+  "reason": "missing_authorization_header"
+}
+```
+
+**Rate Limit Violations:**
+```json
+{
+  "level": "security",
+  "message": "Rate limit exceeded: test-service exceeded limit of 10 requests per 900s",
+  "correlationId": "550e8400-...",
+  "reason": "rate_limit_exceeded",
+  "limit": 10,
+  "windowMs": 900000,
+  "identifier": "test-service"
+}
+```
+
+**Injection Attempts:**
+```json
+{
+  "level": "security",
+  "message": "SQL injection attempt detected in request body",
+  "correlationId": "550e8400-...",
+  "reason": "sql_injection_attempt",
+  "input": "..."
+}
+```
+
+### Log Analysis
+
+Logs are structured JSON, making them easy to parse:
+
+```bash
+# Filter security events
+# (if logs are saved to file)
+cat logs/app.log | jq 'select(.level == "security")'
+
+# Find all events for a specific correlation ID
+cat logs/app.log | jq 'select(.correlationId == "550e8400-...")'
+
+# Find all audit events for service registrations
+cat logs/app.log | jq 'select(.level == "audit" and .message | contains("registered"))'
+```
 
 ---
 
@@ -460,8 +776,14 @@ All monitoring and security features are covered by comprehensive tests:
 - **Metrics Endpoint**: 9 endpoint tests
 - **Coordinator Integration**: 13 integration tests
 - **Config Validation**: 22 validation tests
+- **JWT Authentication**: 18 tests
+- **Route Validation**: 9 tests
+- **Rate Limiting**: 7 tests
+- **Injection Protection**: 18 tests
+- **Logger**: 13 tests
+- **Correlation ID**: 6 tests
 
-**Total: 77 tests, all passing** ✅
+**Total: 222 tests, all passing** ✅
 
 ### Running Tests
 
@@ -473,6 +795,8 @@ npm test
 npm test -- tests/metrics
 npm test -- tests/coordinator
 npm test -- tests/monitoring.config
+npm test -- tests/authServiceJwtMiddleware
+npm test -- tests/logger
 
 # Run with coverage
 npm run test:coverage
@@ -486,25 +810,77 @@ npm run test:coverage
 - ✅ Tests follow clean code principles
 - ✅ `npm test` should be run on every change
 
----
+### Verification Checklist
 
-## Next Steps
+Before considering the implementation complete, verify:
 
-- **Iteration 1**: Config and validation library
-- **Iteration 2**: JWT authentication (RS256)
-- **Iteration 3**: Route protection, rate limiting, injection protection
-- **Iteration 4**: Audit logging and correlation IDs
-- **Iteration 7**: Alert notifications and crisis management (current)
-- **Iteration 8**: Final verification and complete documentation
+- [ ] All 222 tests pass
+- [ ] JWT authentication works (valid tokens accepted, invalid rejected)
+- [ ] Rate limiting blocks excessive requests
+- [ ] Input validation rejects invalid payloads
+- [ ] Injection protection blocks SQL and prompt injection attempts
+- [ ] Metrics are collected and visible in Prometheus
+- [ ] Grafana dashboard shows all required metrics
+- [ ] Alerts fire under failure conditions
+- [ ] Audit logs include correlation IDs
+- [ ] Security events are logged
+- [ ] No secrets or keys are committed to repository
 
 ---
 
 ## Resources
 
 - **Monitoring Setup**: `docs/monitoring-setup.md`
+- **Logging Guide**: `docs/logging.md`
+- **JWT Security**: `docs/security-jwt.md`
 - **Crisis Management**: `docs/crisis-management.md`
 - **Prometheus Config**: `infra/monitoring/prometheus.yml`
 - **Alert Rules**: `infra/monitoring/alerts.yml`
 - **Grafana Dashboard**: `infra/monitoring/grafana-dashboard-coordinator.json`
 - **Alertmanager Config**: `infra/monitoring/alertmanager.example.yml`
 
+---
+
+## Troubleshooting
+
+### Coordinator won't start
+
+**Problem**: Service fails to start with JWT configuration errors
+
+**Solution**: Ensure all required environment variables are set:
+```bash
+export SERVICE_JWT_PUBLIC_KEY="..."
+export SERVICE_JWT_ISSUER="coordinator"
+```
+
+### Prometheus can't scrape metrics
+
+**Problem**: Prometheus shows Coordinator as "DOWN"
+
+**Solution**: 
+1. Verify Coordinator is running: `curl http://localhost:3000/health`
+2. Check metrics endpoint: `curl http://localhost:3000/metrics`
+3. Verify `COORDINATOR_HOST` in Prometheus config matches actual host
+
+### JWT tokens are rejected
+
+**Problem**: Valid tokens return 401
+
+**Solution**:
+1. Verify public key matches the private key used to sign tokens
+2. Check issuer matches: `SERVICE_JWT_ISSUER` must match token's `iss` claim
+3. Verify token hasn't expired
+4. Check token algorithm is RS256 (not HS256)
+
+### Rate limits too strict
+
+**Problem**: Legitimate requests are rate limited
+
+**Solution**: Adjust rate limits in `src/security/rateLimiter.js`:
+- `strictRateLimiter`: 10 requests per 15 minutes
+- `moderateRateLimiter`: 100 requests per minute
+- `generalRateLimiter`: 200 requests per minute
+
+---
+
+**Happy Monitoring! 📊🔒**

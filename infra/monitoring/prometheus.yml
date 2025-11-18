@@ -29,25 +29,29 @@ scrape_configs:
   # Coordinator Service
   - job_name: 'coordinator'
     scrape_interval: 15s
-    scrape_timeout: 10s
+    scrape_timeout: 30s  # Increased timeout for Railway (was 10s)
     metrics_path: '/metrics'
+    scheme: 'https'  # Use https for Railway, http for localhost
+    tls_config:
+      insecure_skip_verify: false  # Railway uses valid SSL certificates - verify them
     static_configs:
       - targets:
-          # TODO: Replace with actual Coordinator hostname:port
-          # This will be injected by Terraform/CI or set via env vars
-          - '${COORDINATOR_HOST:-localhost:3000}'
+          # ============================================================
+          # PRODUCTION URL CONFIGURATION - EASY TO CHANGE
+          # ============================================================
+          # 
+          # Current Railway URL: ms8-learning-analytics-production.up.railway.app:443
+          # 
+          # For local development, comment out the production URL above and
+          # uncomment the localhost line below.
+          # 
+          # To change Railway URL: Update the URL below
+          # ============================================================
+          - 'ms8-learning-analytics-production.up.railway.app:443'  # Railway Production URL
+          # - 'localhost:3000'  # Uncomment this for local development
         labels:
           service: 'coordinator'
-          environment: '${ENVIRONMENT:-development}'
-    
-    # Optional: Relabeling for additional metadata
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: __param_target
-      - source_labels: [__param_target]
-        target_label: instance
-      - target_label: __address__
-        replacement: '${COORDINATOR_HOST:-localhost:3000}'
+          environment: 'production'  # Change to 'development' for local
 
   # Placeholder for future microservices
   # Uncomment and configure when microservices are ready
@@ -65,11 +69,14 @@ scrape_configs:
 
 # Optional: Remote write configuration for Grafana Cloud
 # Uncomment to forward metrics directly to Grafana Cloud (alternative to Alloy)
+# NOTE: If using remote_write, configure credentials via environment variables
+# and use a secrets management system. Do not commit API tokens to the repository.
+#
 # remote_write:
-#   - url: 'https://prometheus-prod-53-prod-me-central-1.grafana.net/api/prom/push'
+#   - url: 'https://prometheus-prod-XX-prod-YY-ZZ.grafana.net/api/prom/push'
 #     basic_auth:
-#       username: '2805139'
-#       password: '${GRAFANA_CLOUD_TOKEN}'  # Replace with your actual Grafana Cloud token
+#       username: '${GRAFANA_CLOUD_USERNAME}'
+#       password: '${GRAFANA_CLOUD_TOKEN}'
 #     queue_config:
 #       max_samples_per_send: 1000
 #       max_shards: 200

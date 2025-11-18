@@ -17,11 +17,12 @@ const {
 
 describe('Injection Protection', () => {
   describe('detectSQLInjection', () => {
-    test('should detect SELECT statements', () => {
-      expect(detectSQLInjection("SELECT * FROM users")).toBe(true);
+    test('should detect SQL injection with quote and OR pattern', () => {
+      // is-sql-injection library detects actual injection patterns, not just SQL keywords
+      expect(detectSQLInjection("' OR '1'='1")).toBe(true);
     });
 
-    test('should detect DROP statements', () => {
+    test('should detect DROP statements with injection pattern', () => {
       expect(detectSQLInjection("'; DROP TABLE users;--")).toBe(true);
     });
 

@@ -1,6 +1,7 @@
 {
   "dashboard": {
     "title": "Coordinator Service - Monitoring Dashboard",
+    "uid": "coordinator-monitoring",
     "tags": ["coordinator", "team4", "monitoring"],
     "timezone": "browser",
     "schemaVersion": 38,
@@ -12,8 +13,16 @@
         "title": "Requests per Second",
         "type": "graph",
         "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
         "targets": [
           {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
             "expr": "sum(rate(http_requests_total{service=\"coordinator\"}[1m])) by (route, method)",
             "legendFormat": "{{route}} - {{method}}",
             "refId": "A"

@@ -30,8 +30,10 @@ const SQL_INJECTION_PATTERNS = [
 /**
  * Common prompt injection patterns to detect
  * These are patterns that attempt to override system instructions
+ * Based on OWASP LLM Top 10 and industry best practices
  */
 const PROMPT_INJECTION_PATTERNS = [
+  // Instruction override patterns
   /ignore\s+(all\s+)?(previous|prior)\s+instructions?/i,
   /forget\s+(all\s+)?(previous|prior)\s+instructions?/i,
   /disregard\s+(all\s+)?(previous|prior)\s+instructions?/i,
@@ -42,6 +44,34 @@ const PROMPT_INJECTION_PATTERNS = [
   /act\s+as\s+if/i,
   /pretend\s+to\s+be/i,
   /roleplay\s+as/i,
+  
+  // Jailbreak patterns
+  /jailbreak/i,
+  /developer\s+mode/i,
+  /god\s+mode/i,
+  /unrestricted\s+mode/i,
+  /bypass\s+(safety|security|filter)/i,
+  
+  // Context manipulation
+  /\[system\]/i,
+  /\[instruction\]/i,
+  /\[prompt\]/i,
+  /<\|system\|>/i,
+  /<\|user\|>/i,
+  /<\|assistant\|>/i,
+  
+  // Encoding/obfuscation attempts
+  /base64|hex|unicode|rot13/i,
+  
+  // Social engineering
+  /this\s+is\s+(important|urgent|critical)/i,
+  /you\s+must|you\s+should|you\s+need\s+to/i,
+  /as\s+a\s+(friend|colleague|developer)/i,
+  
+  // Direct manipulation
+  /print\s+(all|everything|the\s+system)/i,
+  /reveal|expose|show\s+(me\s+)?(the\s+)?(system|prompt|instruction)/i,
+  /what\s+(are|were)\s+(your|the)\s+(original|initial|system)\s+instructions?/i,
 ];
 
 /**

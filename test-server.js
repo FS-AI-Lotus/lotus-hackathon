@@ -67,7 +67,7 @@ app.post('/register',
   strictRateLimiter,
   authServiceJwtMiddleware,
   validateRegisterMiddleware,
-  (req, res) => {
+  async (req, res) => {
   try {
     const { name, url, schema } = req.body;
     const serviceId = req.serviceContext?.serviceId || 'unknown';
@@ -80,12 +80,20 @@ app.post('/register',
 
     // Register service
     const newServiceId = `service-${Date.now()}`;
+    
+    // Generate RSA key pair for this service (asynchronously, non-blocking)
+    const { generateAndStoreKeys } = require('./src/security/serviceKeyStore');
+    const keyPair = await generateAndStoreKeys(newServiceId, name, {
+      modulusLength: 2048, // 2048-bit RSA keys
+    });
+
     registeredServices.set(newServiceId, {
       id: newServiceId,
       name,
       url,
       schema: schema || {},
-      registeredAt: new Date().toISOString()
+      registeredAt: new Date().toISOString(),
+      publicKey: keyPair.publicKey, // Store public key reference
     });
 
     // Track successful registration
@@ -93,7 +101,7 @@ app.post('/register',
 
     // Audit log: Service registration success
     audit({ req, serviceId, registeredService: { id: newServiceId, name, url } }, 
-      `Service registered successfully: ${name}`);
+      `Service registered successfully: ${name} with RSA key pair`);
 
     // Audit log: Schema change (if updating existing service)
     if (existingService && schema) {
@@ -114,7 +122,15 @@ app.post('/register',
       id: newServiceId,
       name,
       url,
-      registeredAt: registeredServices.get(newServiceId).registeredAt
+      registeredAt: registeredServices.get(newServiceId).registeredAt,
+      // Return the private key to the service (they need this to sign JWTs)
+      // WARNING: In production, use a secure channel (HTTPS) and consider
+      // returning this only once or using a key exchange protocol
+      privateKey: keyPair.privateKey,
+      publicKey: keyPair.publicKey, // Also return public key for reference
+      algorithm: keyPair.algorithm,
+      keySize: keyPair.keySize,
+      message: 'Service registered successfully. Store your private key securely!',
     });
   } catch (err) {
     incrementServiceRegistration('failed');

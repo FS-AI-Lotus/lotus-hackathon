@@ -17,6 +17,7 @@
 const jwt = require('jsonwebtoken');
 const { config } = require('../config');
 const { security } = require('../logger');
+const { getPublicKey } = require('./serviceKeyStore');
 
 /**
  * JWT Authentication Middleware
@@ -78,16 +79,53 @@ function authServiceJwtMiddleware(req, res, next) {
   // Get configuration
   const jwtConfig = config().jwt;
 
-  if (!jwtConfig.publicKey) {
-    // This should not happen if config validation is working
-    return res.status(500).json({
-      error: 'Internal Server Error',
-      message: 'JWT public key not configured',
-    });
-  }
-
   // Verify token
   try {
+    // First, try to decode the token to get the service ID (without verification)
+    // This allows us to look up the per-service public key
+    let decodedWithoutVerify;
+    try {
+      decodedWithoutVerify = jwt.decode(token, { complete: true });
+    } catch (decodeError) {
+      security({ req, reason: 'token_decode_failed' }, 
+        'Authentication failed: Cannot decode token');
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid token format',
+      });
+    }
+
+    if (!decodedWithoutVerify || !decodedWithoutVerify.payload) {
+      security({ req, reason: 'invalid_token_structure' }, 
+        'Authentication failed: Invalid token structure');
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid token structure',
+      });
+    }
+
+    // Get service ID from token payload
+    const serviceId = decodedWithoutVerify.payload.sub || decodedWithoutVerify.payload.service_id;
+
+    // Try to get per-service public key first, fall back to global public key
+    let publicKey = null;
+    if (serviceId) {
+      publicKey = getPublicKey(serviceId);
+    }
+
+    // Fall back to global public key if per-service key not found
+    if (!publicKey) {
+      publicKey = jwtConfig.publicKey;
+    }
+
+    if (!publicKey) {
+      // This should not happen if config validation is working
+      return res.status(500).json({
+        error: 'Internal Server Error',
+        message: 'JWT public key not configured',
+      });
+    }
+
     const verifyOptions = {
       algorithms: ['RS256', 'ES256'], // Only allow asymmetric algorithms
     };
@@ -102,8 +140,8 @@ function authServiceJwtMiddleware(req, res, next) {
       verifyOptions.audience = jwtConfig.audience;
     }
 
-    // Verify token
-    const decoded = jwt.verify(token, jwtConfig.publicKey, verifyOptions);
+    // Verify token with the appropriate public key
+    const decoded = jwt.verify(token, publicKey, verifyOptions);
 
     // Validate required claims
     if (!decoded.sub && !decoded.service_id) {

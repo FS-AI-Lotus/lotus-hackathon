@@ -12,6 +12,8 @@ const healthRoutes = require('./routes/health');
 const metricsRoutes = require('./routes/metrics');
 const routeRoutes = require('./routes/route');
 const knowledgeGraphRoutes = require('./routes/knowledgeGraph');
+const changelogRoutes = require('./routes/changelog');
+const schemasRoutes = require('./routes/schemas');
 const proxyRoutes = require('./routes/proxy');
 
 // Create Express app
@@ -68,6 +70,8 @@ app.use('/registry', servicesRoutes); // Alias for /services
 app.use('/route', routeRoutes);
 app.use('/knowledge-graph', knowledgeGraphRoutes);
 app.use('/graph', knowledgeGraphRoutes); // Alias for /knowledge-graph
+app.use('/changelog', changelogRoutes);
+app.use('/schemas', schemasRoutes);
 app.use('/health', healthRoutes);
 app.use('/metrics', metricsRoutes);
 
@@ -78,11 +82,13 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     status: 'running',
     endpoints: {
-      register: 'POST /register',
+      register: 'POST /register, POST /register/:serviceId/migration',
       route: 'GET /route, POST /route (AI-based routing)',
-      knowledgeGraph: 'GET /knowledge-graph, GET /graph',
+      knowledgeGraph: 'GET /knowledge-graph, GET /graph, POST /knowledge-graph/rebuild',
       uiux: 'GET /uiux, POST /uiux',
       services: 'GET /services, GET /registry',
+      changelog: 'GET /changelog, GET /changelog/stats, GET /changelog/search, POST /changelog/cleanup',
+      schemas: 'GET /schemas, GET /schemas/:serviceId, POST /schemas/:serviceId/validate',
       health: 'GET /health',
       metrics: 'GET /metrics',
       proxy: 'All other routes are proxied through AI routing'

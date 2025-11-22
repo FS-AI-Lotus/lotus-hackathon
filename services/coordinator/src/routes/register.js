@@ -50,5 +50,45 @@ router.post('/', sanitizeInput, validateRegistration, async (req, res, next) => 
   }
 });
 
+/**
+ * POST /register/:serviceId/migration
+ * Upload migration file for a registered service (Stage 2)
+ */
+router.post('/:serviceId/migration', sanitizeInput, async (req, res, next) => {
+  try {
+    const { serviceId } = req.params;
+    const { migrationFile } = req.body;
+
+    if (!migrationFile) {
+      return res.status(400).json({
+        success: false,
+        message: 'Migration file is required'
+      });
+    }
+
+    // Complete the service registration with migration file
+    const result = await registryService.completeMigration(serviceId, migrationFile);
+
+    logger.info('Migration file uploaded successfully', {
+      serviceId,
+      serviceName: result.serviceName
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Migration file uploaded successfully',
+      serviceId: serviceId,
+      status: 'active'
+    });
+  } catch (error) {
+    logger.error('Migration upload failed', {
+      error: error.message,
+      serviceId: req.params.serviceId
+    });
+
+    next(error);
+  }
+});
+
 module.exports = router;
 

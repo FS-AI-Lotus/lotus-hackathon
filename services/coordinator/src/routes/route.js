@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const routingService = require('../services/routingService');
+const aiRoutingService = require('../services/aiRoutingService');
 const logger = require('../utils/logger');
 const { sanitizeInput } = require('../middleware/validation');
 
@@ -27,21 +27,43 @@ router.post('/', sanitizeInput, async (req, res, next) => {
       body: body || req.body
     };
 
+    // Create structured data object (same format as gRPC)
+    const routingData = {
+      type: 'http_query',
+      payload: {
+        query: userQuery,
+        metadata: req.body.metadata || {},
+        context: requestContext
+      },
+      context: {
+        protocol: 'http',
+        source: 'rest',
+        method: req.method,
+        path: req.path
+      }
+    };
+
+    const routingConfig = {
+      strategy: req.body.routing?.strategy || 'single',
+      priority: req.body.routing?.priority || 'accuracy'
+    };
+
     logger.info('AI routing request', {
       query: userQuery,
-      context: requestContext
+      data: routingData,
+      config: routingConfig
     });
 
     // Attempt AI routing
     let routingResult;
     try {
-      routingResult = await routingService.routeRequest(userQuery, requestContext);
+      routingResult = await aiRoutingService.routeRequest(routingData, routingConfig);
     } catch (error) {
       // Fallback to rule-based routing if OpenAI fails
       logger.warn('AI routing failed, using fallback', {
         error: error.message
       });
-      routingResult = await routingService.fallbackRouting(userQuery);
+      routingResult = await aiRoutingService.fallbackRouting(userQuery);
     }
 
     if (!routingResult.success) {
@@ -87,7 +109,7 @@ router.get('/', async (req, res, next) => {
     // Attempt AI routing
     let routingResult;
     try {
-      routingResult = await routingService.routeRequest(userQuery, {
+      routingResult = await aiRoutingService.routeRequest(userQuery, {
         method: 'GET',
         path: req.path
       });
@@ -96,7 +118,7 @@ router.get('/', async (req, res, next) => {
       logger.warn('AI routing failed, using fallback', {
         error: error.message
       });
-      routingResult = routingService.fallbackRouting(userQuery);
+      routingResult = aiRoutingService.fallbackRouting(userQuery);
     }
 
     if (!routingResult.success) {

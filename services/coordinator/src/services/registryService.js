@@ -27,7 +27,7 @@ class RegistryService {
    */
   async registerService(serviceData) {
     try {
-      const { serviceName, version, endpoint, healthCheck, migrationFile } = serviceData;
+      const { serviceName, version, endpoint, healthCheck, description, metadata, migrationFile } = serviceData;
 
       // Validate required fields
       if (!serviceName || !version || !endpoint) {
@@ -41,8 +41,17 @@ class RegistryService {
         throw new Error('Invalid endpoint URL format');
       }
 
+      // Check if service name already exists
+      const existingService = await this.getServiceByName(serviceName);
+      if (existingService) {
+        throw new Error(`Service with name '${serviceName}' already exists`);
+      }
+
       // Generate unique service ID
       const serviceId = uuidv4();
+
+      // Determine initial status
+      const initialStatus = migrationFile ? 'active' : 'pending_migration';
 
       // Create service entry
       const serviceEntry = {
@@ -51,10 +60,10 @@ class RegistryService {
         version: version.trim(),
         endpoint: endpoint.trim(),
         health_check: healthCheck ? healthCheck.trim() : '/health',
-        migration_file: migrationFile || {},
+        migration_file: migrationFile || null,
         registered_at: new Date().toISOString(),
         last_health_check: null,
-        status: 'active'
+        status: initialStatus
       };
 
       // Store in Supabase or fallback to memory
@@ -98,10 +107,12 @@ class RegistryService {
           version: version.trim(),
           endpoint: endpoint.trim(),
           healthCheck: healthCheck ? healthCheck.trim() : '/health',
-          migrationFile: migrationFile || {},
+          description: description ? description.trim() : null,
+          metadata: metadata || {},
+          migrationFile: migrationFile || null,
           registeredAt: new Date().toISOString(),
           lastHealthCheck: null,
-          status: 'active'
+          status: initialStatus
         };
         
         this.services.set(serviceId, inMemoryEntry);
@@ -339,6 +350,87 @@ class RegistryService {
       return count || 0;
     } else {
       return Array.from(this.services.values()).filter(s => s.status === 'active').length;
+    }
+  }
+
+  /**
+   * Complete migration for a registered service (Stage 2)
+   * @param {string} serviceId - Service ID
+   * @param {Object} migrationFile - Migration file data
+   * @returns {Promise<Object>} - Updated service
+   */
+  async completeMigration(serviceId, migrationFile) {
+    try {
+      if (this.useSupabase) {
+        // Update service in Supabase with migration file and set to active
+        const { data, error } = await supabase
+          .from('registered_services')
+          .update({
+            migration_file: migrationFile,
+            status: 'active',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', serviceId)
+          .select()
+          .single();
+
+        if (error) {
+          logger.error('Supabase migration update failed', { error: error.message, serviceId });
+          throw new Error(`Failed to complete migration: ${error.message}`);
+        }
+
+        logger.info('Migration completed successfully in Supabase', {
+          serviceId,
+          serviceName: data.service_name
+        });
+
+        // Trigger knowledge graph rebuild
+        const knowledgeGraphService = require('./knowledgeGraphService');
+        setImmediate(() => {
+          knowledgeGraphService.rebuildGraph().catch(error => {
+            logger.warn('Failed to rebuild knowledge graph after migration', {
+              error: error.message
+            });
+          });
+        });
+
+        return this._mapSupabaseToService(data);
+      } else {
+        // Update service in memory
+        const service = this.services.get(serviceId);
+        if (!service) {
+          throw new Error('Service not found');
+        }
+
+        service.migrationFile = migrationFile;
+        service.status = 'active';
+        service.updatedAt = new Date().toISOString();
+
+        this.services.set(serviceId, service);
+
+        logger.info('Migration completed successfully in memory', {
+          serviceId,
+          serviceName: service.serviceName
+        });
+
+        // Trigger knowledge graph rebuild
+        const knowledgeGraphService = require('./knowledgeGraphService');
+        setImmediate(() => {
+          knowledgeGraphService.rebuildGraph().catch(error => {
+            logger.warn('Failed to rebuild knowledge graph after migration', {
+              error: error.message
+            });
+          });
+        });
+
+        return service;
+      }
+    } catch (error) {
+      logger.error('Failed to complete migration', {
+        error: error.message,
+        serviceId
+      });
+      throw error;
     }
   }
 

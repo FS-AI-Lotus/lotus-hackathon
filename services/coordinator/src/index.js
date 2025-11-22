@@ -111,30 +111,67 @@ setImmediate(async () => {
   }
 });
 
-// Start server
+// Start HTTP server
 const server = app.listen(PORT, () => {
-  logger.info(`Coordinator microservice started`, {
+  logger.info(`Coordinator HTTP server started`, {
     port: PORT,
     environment: process.env.NODE_ENV || 'development'
   });
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM signal received: closing HTTP server');
-  server.close(() => {
-    logger.info('HTTP server closed');
-    process.exit(0);
-  });
-});
+// Start gRPC server
+const { startGrpcServer } = require('./grpc/server');
+let grpcServer = null;
 
-process.on('SIGINT', () => {
-  logger.info('SIGINT signal received: closing HTTP server');
+const grpcEnabled = process.env.GRPC_ENABLED !== 'false'; // Default: enabled
+if (grpcEnabled) {
+  startGrpcServer()
+    .then((server) => {
+      grpcServer = server;
+      logger.info('Both HTTP and gRPC servers are running', {
+        httpPort: PORT,
+        grpcPort: process.env.GRPC_PORT || 50051
+      });
+    })
+    .catch((error) => {
+      logger.error('Failed to start gRPC server', { error: error.message });
+    });
+} else {
+  logger.info('gRPC server disabled via GRPC_ENABLED=false');
+}
+
+// Graceful shutdown
+const gracefulShutdown = (signal) => {
+  logger.info(`${signal} signal received: shutting down gracefully`);
+  
+  // Close HTTP server
   server.close(() => {
     logger.info('HTTP server closed');
-    process.exit(0);
+    
+    // Close gRPC server if running
+    if (grpcServer) {
+      grpcServer.tryShutdown((error) => {
+        if (error) {
+          logger.error('Error shutting down gRPC server', { error: error.message });
+          grpcServer.forceShutdown();
+        } else {
+          logger.info('gRPC server closed');
+        }
+        
+        // Close gRPC clients
+        const { closeMicroserviceClients } = require('./grpc/client');
+        closeMicroserviceClients();
+        
+        process.exit(0);
+      });
+    } else {
+      process.exit(0);
+    }
   });
-});
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 module.exports = app;
 

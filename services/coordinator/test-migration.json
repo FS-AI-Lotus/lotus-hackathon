@@ -1,0 +1,38 @@
+{
+  "migrationFile": {
+    "version": "1.0.0",
+    "database": {
+      "tables": [
+        {
+          "name": "payments",
+          "schema": {
+            "id": "uuid",
+            "amount": "decimal",
+            "currency": "string",
+            "status": "string",
+            "created_at": "timestamp"
+          }
+        }
+      ]
+    },
+    "api": {
+      "endpoints": [
+        {
+          "path": "/api/payment/process",
+          "method": "POST",
+          "description": "Process a payment"
+        },
+        {
+          "path": "/api/payment/status",
+          "method": "GET", 
+          "description": "Get payment status"
+        }
+      ]
+    },
+    "dependencies": ["notification-service"],
+    "events": {
+      "publishes": ["payment.completed", "payment.failed"],
+      "subscribes": ["order.created"]
+    }
+  }
+}

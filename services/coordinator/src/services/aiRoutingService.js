@@ -53,7 +53,9 @@ class AIRoutingService {
           routingResult = await this._aiRoute(data, activeServices, routing);
           logger.info('AI routing successful', {
             targetServices: routingResult.targetServices.map(s => s.serviceName),
-            confidence: routingResult.targetServices[0]?.confidence,
+            totalCandidates: routingResult.totalCandidates,
+            primaryTarget: routingResult.primaryTarget?.serviceName,
+            confidence: routingResult.primaryTarget?.confidence,
             aiModel: process.env.AI_MODEL || 'gpt-4o-mini'
           });
         } catch (aiError) {
@@ -78,6 +80,10 @@ class AIRoutingService {
         success: true,
         routing: {
           targetServices: routingResult.targetServices,
+          rankedServices: routingResult.rankedServices || routingResult.targetServices,
+          primaryTarget: routingResult.primaryTarget,
+          backupTargets: routingResult.backupTargets || [],
+          totalCandidates: routingResult.totalCandidates || routingResult.targetServices.length,
           strategy: routing.strategy || 'single',
           processingTime: `${processingTime}ms`,
           method: routingResult.method || 'fallback'
@@ -120,7 +126,7 @@ class AIRoutingService {
         }
       ],
       temperature: 0.1,
-      max_tokens: 1000
+      max_tokens: 2000 // Increased to accommodate 5-10 candidates
     });
 
     const aiResponse = response.choices[0].message.content;
@@ -180,9 +186,12 @@ ${serviceDescriptions}
 Instructions:
 1. Analyze the request type, payload, and context
 2. Match against service capabilities, endpoints, and events
-3. Consider the routing strategy (single = one service, multiple = several services, broadcast = all relevant)
-4. Provide confidence scores (0-1) based on how well each service matches
-5. Include reasoning for your decisions
+3. Return ALL relevant services ranked by confidence
+4. Include minimum 5 candidates (if available), maximum 10 candidates
+5. Only include services with confidence > 0.3
+6. Sort by confidence descending (highest first)
+7. Provide confidence scores (0-1) based on how well each service matches
+8. Include reasoning for your decisions
 
 Respond with JSON in this exact format:
 {
@@ -196,6 +205,12 @@ Respond with JSON in this exact format:
   ],
   "strategy": "single|multiple|broadcast"
 }
+
+IMPORTANT:
+- Return minimum 5 candidates (if available), maximum 10 candidates
+- Only include services with confidence > 0.3
+- Sort by confidence descending
+- If fewer than 5 services are available, return all relevant ones
 
 If no services match well, return an empty targetServices array with reasoning.`;
   }
@@ -235,6 +250,7 @@ If no services match well, return an empty targetServices array with reasoning.`
       }
 
       // Validate and enrich target services
+      // Filter by confidence > 0.3 and sort by confidence descending
       const validatedServices = parsed.targetServices
         .map(target => {
           const service = services.find(s => s.serviceName === target.serviceName);
@@ -250,10 +266,40 @@ If no services match well, return an empty targetServices array with reasoning.`
             reasoning: target.reasoning || 'AI recommendation'
           };
         })
-        .filter(Boolean);
+        .filter(Boolean)
+        .filter(service => service.confidence > 0.3) // Only include services with confidence > 0.3
+        .sort((a, b) => b.confidence - a.confidence) // Sort by confidence descending
+        .slice(0, 10); // Limit to maximum 10 candidates
+
+      // If no services found with confidence > 0.3, include all services with low confidence (for cascading)
+      // This ensures cascade can try all services even if AI doesn't find good matches
+      let rankedServices = validatedServices;
+      
+      if (rankedServices.length === 0 && services.length > 0) {
+        logger.warn('AI routing returned no services with confidence > 0.3, including all services for cascading', {
+          totalServices: services.length,
+          aiReturnedCount: parsed.targetServices.length
+        });
+        
+        // Return all services with low confidence for cascading
+        rankedServices = services.map((service, index) => ({
+          serviceName: service.serviceName,
+          endpoint: service.endpoint,
+          confidence: 0.3 - (index * 0.01), // Slight ranking: first service gets 0.3, second 0.29, etc.
+          reasoning: 'AI returned no high-confidence matches, including all services for cascading fallback'
+        })).slice(0, 10); // Limit to 10
+      }
+
+      // Extract primary target and backup targets
+      const primaryTarget = rankedServices[0] || null;
+      const backupTargets = rankedServices.slice(1, 5); // Top 4 backups (ranks 2-5)
 
       return {
-        targetServices: validatedServices,
+        targetServices: rankedServices,
+        rankedServices: rankedServices, // Alias for clarity
+        primaryTarget: primaryTarget,
+        backupTargets: backupTargets,
+        totalCandidates: rankedServices.length,
         method: 'ai'
       };
 
@@ -337,39 +383,40 @@ If no services match well, return an empty targetServices array with reasoning.`
       }
     }
 
-    // Sort by confidence
+    // Sort by confidence descending
     matches.sort((a, b) => b.confidence - a.confidence);
 
-    // Apply routing strategy
-    let targetServices = [];
-    const strategy = routing.strategy || 'single';
+    // Filter by confidence > 0.3 and limit to 10 candidates
+    let rankedServices = matches
+      .filter(m => m.confidence > 0.3)
+      .slice(0, 10); // Maximum 10 candidates
 
-    switch (strategy) {
-      case 'single':
-        targetServices = matches.slice(0, 1);
-        break;
-      case 'multiple':
-        targetServices = matches.slice(0, 3); // Top 3 matches
-        break;
-      case 'broadcast':
-        targetServices = matches.filter(m => m.confidence > 0.3); // All decent matches
-        break;
-      default:
-        targetServices = matches.slice(0, 1);
+    // If no matches found with confidence > 0.3, return top matches anyway (for cascading)
+    if (rankedServices.length === 0 && matches.length > 0) {
+      rankedServices = matches.slice(0, 10);
     }
 
-    // If no matches found, return the first available service as last resort
-    if (targetServices.length === 0 && services.length > 0) {
-      targetServices = [{
-        serviceName: services[0].serviceName,
-        endpoint: services[0].endpoint,
-        confidence: 0.1,
-        reasoning: 'Default fallback - no specific matches found'
-      }];
+    // If still no matches, return ALL available services with low confidence (for cascading)
+    // This ensures cascade can try all services even without keyword matches
+    if (rankedServices.length === 0 && services.length > 0) {
+      rankedServices = services.map((service, index) => ({
+        serviceName: service.serviceName,
+        endpoint: service.endpoint,
+        confidence: 0.3 - (index * 0.01), // Slight ranking: first service gets 0.3, second 0.29, etc.
+        reasoning: 'Default fallback - no specific matches found, including all services for cascading'
+      })).slice(0, 10); // Limit to 10
     }
+
+    // Extract primary target and backup targets
+    const primaryTarget = rankedServices[0] || null;
+    const backupTargets = rankedServices.slice(1, 5); // Top 4 backups (ranks 2-5)
 
     return {
-      targetServices,
+      targetServices: rankedServices,
+      rankedServices: rankedServices, // Alias for clarity
+      primaryTarget: primaryTarget,
+      backupTargets: backupTargets,
+      totalCandidates: rankedServices.length,
       method: 'fallback'
     };
   }

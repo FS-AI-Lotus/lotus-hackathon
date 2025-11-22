@@ -395,3 +395,4 @@ else
     echo -e "${RED}Some tests failed. Please check the output above.${NC}"
     exit 1
 fi
+

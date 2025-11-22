@@ -435,6 +435,46 @@ class RegistryService {
   }
 
   /**
+   * Delete a service by ID
+   * @param {string} serviceId - Service ID
+   * @returns {Promise<boolean>} - True if deleted successfully
+   */
+  async deleteService(serviceId) {
+    try {
+      if (this.useSupabase) {
+        const { error } = await supabase
+          .from('registered_services')
+          .delete()
+          .eq('id', serviceId);
+
+        if (error) {
+          logger.error('Failed to delete service from Supabase', {
+            serviceId,
+            error: error.message
+          });
+          return false;
+        }
+
+        logger.info('Service deleted from Supabase', { serviceId });
+        return true;
+      } else {
+        // In-memory deletion
+        const deleted = this.services.delete(serviceId);
+        if (deleted) {
+          logger.info('Service deleted from memory', { serviceId });
+        }
+        return deleted;
+      }
+    } catch (error) {
+      logger.error('Failed to delete service', {
+        serviceId,
+        error: error.message
+      });
+      return false;
+    }
+  }
+
+  /**
    * Map Supabase row to service object (snake_case to camelCase)
    * @param {Object} row - Supabase row
    * @returns {Object} - Service object

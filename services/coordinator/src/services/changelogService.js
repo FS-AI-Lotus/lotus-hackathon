@@ -241,3 +241,4 @@ class ChangelogService {
 const changelogService = new ChangelogService();
 
 module.exports = changelogService;
+

@@ -79,7 +79,7 @@ class CoordinatorServiceHandler {
 
       const routingResult = await aiRoutingService.routeRequest(routingData, routingConfig);
       
-      if (!routingResult.success || !routingResult.routing.targetServices.length) {
+      if (!routingResult.success || !routingResult.routing.rankedServices || routingResult.routing.rankedServices.length === 0) {
         const error = new Error('AI routing failed to find suitable services');
         logger.error('gRPC AI routing failed', {
           requestId: envelope.request_id,
@@ -89,26 +89,26 @@ class CoordinatorServiceHandler {
         return callback(error);
       }
 
-      // Step 4: Get target service details
-      const targetServices = routingResult.routing.targetServices;
-      const serviceNames = targetServices.map(service => service.serviceName);
+      // Step 4: Get ranked services for cascading
+      const rankedServices = routingResult.routing.rankedServices;
       
       logger.info('gRPC routing completed', {
         requestId: envelope.request_id,
-        targetServices: serviceNames,
-        confidence: targetServices[0]?.confidence,
+        totalCandidates: routingResult.routing.totalCandidates,
+        primaryTarget: routingResult.routing.primaryTarget?.serviceName,
+        primaryConfidence: routingResult.routing.primaryTarget?.confidence,
         method: routingResult.routing.method
       });
 
-      // Step 5: Call target services via gRPC using communicationService
-      logger.debug('Calling microservices via gRPC', {
+      // Step 5: Call services with cascading fallback via gRPC
+      logger.debug('Calling microservices with cascading fallback via gRPC', {
         requestId: envelope.request_id,
-        serviceCount: targetServices.length,
+        candidateCount: rankedServices.length,
         protocol: 'grpc'
       });
 
-      const serviceCallResults = await communicationService.callMicroservices(
-        targetServices,
+      const cascadeResult = await communicationService.callWithCascadingFallback(
+        rankedServices,
         {
           tenant_id: request.tenant_id,
           user_id: request.user_id,
@@ -126,25 +126,120 @@ class CoordinatorServiceHandler {
         }
       );
 
-      logger.info('Microservice calls completed via gRPC', {
+      logger.info('Cascading routing completed', {
         requestId: envelope.request_id,
-        successfulCalls: serviceCallResults.filter(r => r.success).length,
-        failedCalls: serviceCallResults.filter(r => !r.success).length
+        successful_service: cascadeResult.successfulResult?.serviceName,
+        rank_used: cascadeResult.successfulResult?.rank,
+        total_attempts: cascadeResult.totalAttempts,
+        stopped_reason: cascadeResult.stopped,
+        total_duration: cascadeResult.totalTime
       });
       
-      // Step 6: Build gRPC RouteResponse
-      const response = {
-        target_services: serviceNames,
-        normalized_fields: envelopeService.extractNormalizedFields(envelope),
-        envelope_json: envelopeService.envelopeToJson(envelope),
-        routing_metadata: envelopeService.createRoutingMetadata(targetServices, {
-          method: routingResult.routing.method,
-          processingTime: routingResult.routing.processingTime,
-          strategy: routingConfig.strategy
-        })
+      // Step 6: Build gRPC RouteResponse with cascade metadata
+      const processingTime = Date.now() - startTime;
+      
+      // Extract base normalized fields and add cascade information
+      const baseNormalizedFields = envelopeService.extractNormalizedFields(envelope);
+      const normalizedFields = {
+        ...baseNormalizedFields,
+        // Cascade information
+        successful_service: cascadeResult.successfulResult?.serviceName || 'none',
+        rank_used: cascadeResult.successfulResult?.rank?.toString() || '0',
+        total_attempts: cascadeResult.totalAttempts.toString(),
+        // AI ranking information
+        primary_target: routingResult.routing.primaryTarget?.serviceName || 'none',
+        primary_confidence: routingResult.routing.primaryTarget?.confidence?.toString() || '0',
+        // Execution information
+        stopped_reason: cascadeResult.stopped,
+        quality_score: cascadeResult.successfulResult?.quality?.toString() || '0',
+        total_time: cascadeResult.totalTime,
+        processing_time: `${processingTime}ms`
       };
 
-      const processingTime = Date.now() - startTime;
+      // Build envelope_json with full cascade details
+      const envelopeJson = JSON.stringify({
+        request: {
+          tenant_id: request.tenant_id,
+          user_id: request.user_id,
+          query_text: request.query_text
+        },
+        aiRanking: routingResult.routing.rankedServices.map(s => ({
+          serviceName: s.serviceName,
+          endpoint: s.endpoint,
+          confidence: s.confidence,
+          reasoning: s.reasoning
+        })),
+        cascadeAttempts: cascadeResult.allAttempts.map(a => ({
+          rank: a.rank,
+          serviceName: a.serviceName,
+          confidence: a.confidence,
+          success: a.success,
+          quality: a.quality,
+          duration: a.duration,
+          error: a.error,
+          rejectReason: a.rejectReason
+        })),
+        successfulResult: cascadeResult.successfulResult ? {
+          serviceName: cascadeResult.successfulResult.serviceName,
+          rank: cascadeResult.successfulResult.rank,
+          confidence: cascadeResult.successfulResult.confidence,
+          quality: cascadeResult.successfulResult.quality,
+          duration: cascadeResult.successfulResult.duration,
+          protocol: cascadeResult.successfulResult.protocol,
+          reasoning: cascadeResult.successfulResult.reasoning,
+          data: cascadeResult.successfulResult.data
+        } : null,
+        metadata: {
+          total_attempts: cascadeResult.totalAttempts,
+          stopped_reason: cascadeResult.stopped,
+          total_time: cascadeResult.totalTime,
+          processing_time: `${processingTime}ms`
+        },
+        original_envelope: envelope
+      }, null, 2);
+
+      // Build routing_metadata with cascade execution details
+      const routingMetadata = JSON.stringify({
+        routing_strategy: 'cascading_fallback',
+        ai_ranking: routingResult.routing.rankedServices.map(s => ({
+          name: s.serviceName,
+          confidence: s.confidence,
+          reasoning: s.reasoning
+        })),
+        execution: {
+          total_attempts: cascadeResult.totalAttempts,
+          successful_rank: cascadeResult.successfulResult?.rank || null,
+          stopped_reason: cascadeResult.stopped,
+          successful_service: cascadeResult.successfulResult?.serviceName || null
+        },
+        performance: {
+          cascade_time: cascadeResult.totalTime,
+          total_duration_ms: processingTime
+        },
+        all_attempts: cascadeResult.allAttempts.map(a => ({
+          rank: a.rank,
+          service: a.serviceName,
+          success: a.success,
+          quality: a.quality,
+          duration: a.duration,
+          reject_reason: a.rejectReason,
+          error: a.error
+        })),
+        ai_routing: {
+          method: routingResult.routing.method,
+          processingTime: routingResult.routing.processingTime,
+          strategy: routingConfig.strategy,
+          totalCandidates: routingResult.routing.totalCandidates
+        }
+      }, null, 2);
+
+      // Build response
+      const response = {
+        target_services: cascadeResult.allAttempts.map(a => a.serviceName),
+        normalized_fields: normalizedFields,
+        envelope_json: envelopeJson,
+        routing_metadata: routingMetadata
+      };
 
       // Step 7: Record metrics
       if (metricsService.recordGrpcRequest) {
@@ -153,7 +248,9 @@ class CoordinatorServiceHandler {
 
       logger.info('gRPC Route response sent', {
         requestId: envelope.request_id,
-        targetServiceCount: serviceNames.length,
+        targetServiceCount: cascadeResult.allAttempts.length,
+        successfulService: cascadeResult.successfulResult?.serviceName,
+        successfulRank: cascadeResult.successfulResult?.rank,
         processingTime: `${processingTime}ms`,
         envelopeSize: response.envelope_json.length
       });

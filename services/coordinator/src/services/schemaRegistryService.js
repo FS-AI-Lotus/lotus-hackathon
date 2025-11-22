@@ -415,3 +415,4 @@ class SchemaRegistryService {
 const schemaRegistryService = new SchemaRegistryService();
 
 module.exports = schemaRegistryService;
+

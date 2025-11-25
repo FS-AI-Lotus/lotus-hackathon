@@ -1,0 +1,7 @@
+# Railway Configuration
+# Copy this file to terraform.tfvars and fill in your values
+
+railway_token         = "your-railway-token-here"
+railway_project_id    = "8632d9e3-3e0f-4fe2-8271-b12306d776ba"
+railway_environment_id = "9290683b-f743-469c-9c05-6a439e73ba4a"
+

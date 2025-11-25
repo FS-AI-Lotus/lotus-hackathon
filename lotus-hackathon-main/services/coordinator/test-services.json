@@ -1,0 +1,130 @@
+[
+  {
+    "name": "User Service",
+    "request": {
+      "method": "POST",
+      "url": "http://localhost:3000/register",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "serviceName": "user-service",
+        "version": "1.0.0",
+        "endpoint": "http://localhost:3001",
+        "healthCheck": "/health",
+        "migrationFile": {
+          "schema": "v1",
+          "tables": ["users", "profiles", "user_preferences"],
+          "description": "Handles user management, profiles, and preferences"
+        }
+      }
+    }
+  },
+  {
+    "name": "Auth Service",
+    "request": {
+      "method": "POST",
+      "url": "http://localhost:3000/register",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "serviceName": "auth-service",
+        "version": "1.2.0",
+        "endpoint": "http://localhost:3002",
+        "healthCheck": "/api/health",
+        "migrationFile": {
+          "schema": "v1",
+          "tables": ["sessions", "tokens", "users"],
+          "description": "Handles authentication, sessions, and tokens"
+        }
+      }
+    }
+  },
+  {
+    "name": "Product Service",
+    "request": {
+      "method": "POST",
+      "url": "http://localhost:3000/register",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "serviceName": "product-service",
+        "version": "2.1.0",
+        "endpoint": "http://localhost:3003",
+        "healthCheck": "/health",
+        "migrationFile": {
+          "schema": "v2",
+          "tables": ["products", "categories", "inventory", "reviews"],
+          "description": "Handles product catalog, inventory, and reviews"
+        }
+      }
+    }
+  },
+  {
+    "name": "Order Service",
+    "request": {
+      "method": "POST",
+      "url": "http://localhost:3000/register",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "serviceName": "order-service",
+        "version": "1.5.3",
+        "endpoint": "http://localhost:3004",
+        "healthCheck": "/health",
+        "migrationFile": {
+          "schema": "v2",
+          "tables": ["orders", "order_items", "users", "products"],
+          "description": "Handles order processing and order items"
+        }
+      }
+    }
+  },
+  {
+    "name": "Payment Service",
+    "request": {
+      "method": "POST",
+      "url": "http://localhost:3000/register",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "serviceName": "payment-service",
+        "version": "2.0.0",
+        "endpoint": "http://localhost:3005",
+        "healthCheck": "/api/health",
+        "migrationFile": {
+          "schema": "v2",
+          "tables": ["payments", "transactions", "orders"],
+          "description": "Handles payment processing and transactions"
+        }
+      }
+    }
+  },
+  {
+    "name": "Notification Service",
+    "request": {
+      "method": "POST",
+      "url": "http://localhost:3000/register",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "serviceName": "notification-service",
+        "version": "1.0.0",
+        "endpoint": "http://localhost:3006",
+        "healthCheck": "/health",
+        "migrationFile": {
+          "schema": "v1",
+          "tables": ["notifications", "user_notifications", "users"],
+          "description": "Handles notifications and messaging"
+        }
+      }
+    }
+  }
+]
+
+

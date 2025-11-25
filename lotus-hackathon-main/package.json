@@ -1,0 +1,13 @@
+{
+  "name": "monorepo-orchestrator",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "check-services": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.5.0"
+  }
+}
+
+

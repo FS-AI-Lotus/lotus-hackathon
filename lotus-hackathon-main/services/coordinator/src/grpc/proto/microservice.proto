@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package microservice.v1;
+
+service MicroserviceAPI {
+  rpc Process (ProcessRequest) returns (ProcessResponse);
+}
+
+message ProcessRequest {
+  string envelope_json = 1;  // Universal Envelope as JSON string
+}
+
+message ProcessResponse {
+  string envelope_json = 1;  // Response as JSON string
+  bool success = 2;
+  string error = 3;
+}

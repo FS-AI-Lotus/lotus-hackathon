@@ -1,0 +1,136 @@
+{
+  "info": {
+    "name": "Coordinator API - Test Requests",
+    "description": "Collection of test requests for Coordinator Microservice",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/health",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["health"]
+        }
+      }
+    },
+    {
+      "name": "Register User Service",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"serviceName\": \"user-service\",\n  \"version\": \"1.0.0\",\n  \"endpoint\": \"http://localhost:3001\",\n  \"healthCheck\": \"/health\",\n  \"migrationFile\": {\n    \"schema\": \"v1\",\n    \"tables\": [\"users\", \"profiles\"]\n  }\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/register",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["register"]
+        }
+      }
+    },
+    {
+      "name": "Register Product Service",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"serviceName\": \"product-service\",\n  \"version\": \"2.1.0\",\n  \"endpoint\": \"http://localhost:3002\",\n  \"healthCheck\": \"/api/health\",\n  \"migrationFile\": {\n    \"schema\": \"v2\",\n    \"tables\": [\"products\", \"categories\"]\n  }\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/register",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["register"]
+        }
+      }
+    },
+    {
+      "name": "Get All Services",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/services",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["services"]
+        }
+      }
+    },
+    {
+      "name": "Get UI/UX Config",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/uiux",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["uiux"]
+        }
+      }
+    },
+    {
+      "name": "Update UI/UX Config",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"config\": {\n    \"theme\": {\n      \"primaryColor\": \"#007bff\",\n      \"secondaryColor\": \"#6c757d\"\n    },\n    \"components\": {\n      \"button\": {\n        \"style\": \"rounded\"\n      }\n    }\n  }\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/uiux",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["uiux"]
+        }
+      }
+    },
+    {
+      "name": "Get Metrics",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/metrics",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["metrics"]
+        }
+      }
+    }
+  ]
+}
+
+

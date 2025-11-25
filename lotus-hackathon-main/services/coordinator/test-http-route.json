@@ -1,0 +1,18 @@
+{
+  "query": "process payment for order 123",
+  "data": {
+    "type": "payment_request",
+    "payload": {
+      "amount": 100.50,
+      "currency": "USD"
+    },
+    "context": {
+      "userId": "user-123",
+      "orderId": "order-123"
+    }
+  },
+  "routing": {
+    "strategy": "single",
+    "priority": "accuracy"
+  }
+}

@@ -31,20 +31,26 @@ class RegistryService {
 
       // Validate required fields
       if (!serviceName || !version || !endpoint) {
-        throw new Error('Missing required fields: serviceName, version, endpoint');
+        const error = new Error('Missing required fields: serviceName, version, endpoint');
+        error.status = 400;
+        throw error;
       }
 
       // Validate endpoint URL format
       try {
         new URL(endpoint);
       } catch (error) {
-        throw new Error('Invalid endpoint URL format');
+        const validationError = new Error('Invalid endpoint URL format');
+        validationError.status = 400;
+        throw validationError;
       }
 
       // Check if service name already exists
       const existingService = await this.getServiceByName(serviceName);
       if (existingService) {
-        throw new Error(`Service with name '${serviceName}' already exists`);
+        const error = new Error(`Service with name '${serviceName}' already exists`);
+        error.status = 409; // Conflict
+        throw error;
       }
 
       // Generate unique service ID
@@ -379,6 +385,13 @@ class RegistryService {
           throw new Error(`Failed to complete migration: ${error.message}`);
         }
 
+        if (!data) {
+          logger.error('Service not found for migration update', { serviceId });
+          const error = new Error('Service not found');
+          error.status = 404;
+          throw error;
+        }
+
         logger.info('Migration completed successfully in Supabase', {
           serviceId,
           serviceName: data.service_name
@@ -399,7 +412,9 @@ class RegistryService {
         // Update service in memory
         const service = this.services.get(serviceId);
         if (!service) {
-          throw new Error('Service not found');
+          const error = new Error('Service not found');
+          error.status = 404;
+          throw error;
         }
 
         service.migrationFile = migrationFile;

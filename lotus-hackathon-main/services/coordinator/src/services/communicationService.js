@@ -1,9 +1,24 @@
 const logger = require('../utils/logger');
 const envelopeService = require('./envelopeService');
-const grpcClient = require('../grpc/client');
 const metricsService = require('./metricsService');
 const routingConfig = require('../config/routing');
 const registryService = require('./registryService');
+
+// Lazy load gRPC client to avoid crashes if dependencies missing
+let grpcClient = null;
+let grpcClientLoadAttempted = false;
+function getGrpcClient() {
+  if (!grpcClient && !grpcClientLoadAttempted) {
+    grpcClientLoadAttempted = true;
+    try {
+      grpcClient = require('../grpc/client');
+    } catch (error) {
+      logger.warn('gRPC client not available', { error: error.message });
+      return null;
+    }
+  }
+  return grpcClient;
+}
 
 /**
  * Communication Service - Protocol abstraction layer
@@ -122,7 +137,11 @@ class CommunicationService {
       const envelopeJson = envelopeService.envelopeToJson(envelope);
       
       // Call service using gRPC client
-      const result = await grpcClient.callMicroserviceViaGrpc(
+      const grpc = getGrpcClient();
+      if (!grpc) {
+        throw new Error('gRPC client not available. Install @grpc/grpc-js and @grpc/proto-loader, or use HTTP protocol.');
+      }
+      const result = await grpc.callMicroserviceViaGrpc(
         service.serviceName,
         service.endpoint,
         envelopeJson
@@ -312,7 +331,7 @@ class CommunicationService {
     return {
       defaultProtocol: this.defaultProtocol,
       timeout: this.timeout,
-      grpcClientStatus: grpcClient.getStatus(),
+      grpcClientStatus: getGrpcClient()?.getStatus() || { available: false, reason: 'gRPC dependencies not installed' },
       supportedProtocols: ['http', 'grpc']
     };
   }
@@ -726,7 +745,12 @@ class CommunicationService {
 
     // Test gRPC
     try {
-      results.grpc = await grpcClient.healthCheck(service.serviceName, service.endpoint);
+      const grpc = getGrpcClient();
+      if (grpc) {
+        results.grpc = await grpc.healthCheck(service.serviceName, service.endpoint);
+      } else {
+        results.grpc = { available: false, reason: 'gRPC client not available' };
+      }
     } catch (error) {
       logger.debug('gRPC health check failed', {
         serviceName: service.serviceName,

@@ -118,30 +118,44 @@ setImmediate(async () => {
 });
 
 // Start HTTP server
-const server = app.listen(PORT, () => {
+// Listen on 0.0.0.0 for Railway deployment
+const server = app.listen(PORT, '0.0.0.0', () => {
   logger.info(`Coordinator HTTP server started`, {
     port: PORT,
+    host: '0.0.0.0',
     environment: process.env.NODE_ENV || 'development'
   });
 });
 
-// Start gRPC server
-const { startGrpcServer } = require('./grpc/server');
+// Start gRPC server (optional, won't crash if it fails)
 let grpcServer = null;
-
 const grpcEnabled = process.env.GRPC_ENABLED !== 'false'; // Default: enabled
+
 if (grpcEnabled) {
-  startGrpcServer()
-    .then((server) => {
-      grpcServer = server;
-      logger.info('Both HTTP and gRPC servers are running', {
-        httpPort: PORT,
-        grpcPort: process.env.GRPC_PORT || 50051
+  try {
+    const { startGrpcServer } = require('./grpc/server');
+    startGrpcServer()
+      .then((server) => {
+        grpcServer = server;
+        logger.info('Both HTTP and gRPC servers are running', {
+          httpPort: PORT,
+          grpcPort: process.env.GRPC_PORT || 50051
+        });
+      })
+      .catch((error) => {
+        logger.warn('Failed to start gRPC server (HTTP server will continue)', { 
+          error: error.message,
+          hint: 'Set GRPC_ENABLED=false to disable gRPC, or install @grpc/grpc-js and @grpc/proto-loader'
+        });
+        // Don't crash - HTTP server is more important
       });
-    })
-    .catch((error) => {
-      logger.error('Failed to start gRPC server', { error: error.message });
+  } catch (error) {
+    logger.warn('gRPC dependencies not available (HTTP server will continue)', {
+      error: error.message,
+      hint: 'Install @grpc/grpc-js and @grpc/proto-loader for gRPC support, or set GRPC_ENABLED=false'
     });
+    // Don't crash - HTTP server is more important
+  }
 } else {
   logger.info('gRPC server disabled via GRPC_ENABLED=false');
 }

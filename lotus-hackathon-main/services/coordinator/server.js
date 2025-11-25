@@ -1,9 +1,25 @@
+/**
+ * ⚠️ DEPRECATED - This file is not used!
+ * 
+ * The actual Coordinator service entry point is: src/index.js
+ * 
+ * This file exists for legacy reasons and should not be used.
+ * The package.json "start" script points to src/index.js, not this file.
+ * 
+ * If you're seeing this file running, check your package.json configuration.
+ */
+
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Log warning on startup
+console.warn('⚠️  WARNING: Running deprecated server.js!');
+console.warn('⚠️  The correct entry point is: src/index.js');
+console.warn('⚠️  Please update your start script to use: node src/index.js');
 
 app.get('/health', (req, res) => {
 	res.status(200).json({ status: 'ok', service: 'coordinator' });

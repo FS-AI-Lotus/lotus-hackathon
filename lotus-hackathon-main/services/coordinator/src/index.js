@@ -118,13 +118,31 @@ setImmediate(async () => {
 });
 
 // Start HTTP server
-// Listen on 0.0.0.0 for Railway deployment
-const server = app.listen(PORT, '0.0.0.0', () => {
+// Use 0.0.0.0 for Railway/deployment, 127.0.0.1 for local development (avoids IPv6 issues)
+const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
+const server = app.listen(PORT, HOST, (err) => {
+  if (err) {
+    logger.error('Failed to start server', { error: err.message, port: PORT, host: HOST });
+    process.exit(1);
+  }
   logger.info(`Coordinator HTTP server started`, {
     port: PORT,
-    host: '0.0.0.0',
+    host: HOST,
+    url: `http://${HOST}:${PORT}`,
     environment: process.env.NODE_ENV || 'development'
   });
+});
+
+// Handle server errors
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    logger.error(`Port ${PORT} is already in use. Try a different port: PORT=3002 npm start`);
+  } else if (err.code === 'EACCES') {
+    logger.error(`Permission denied on port ${PORT}. Try a different port: PORT=3002 npm start`);
+  } else {
+    logger.error('Server error', { error: err.message, code: err.code });
+  }
+  process.exit(1);
 });
 
 // Start gRPC server (optional, won't crash if it fails)

@@ -92,9 +92,9 @@ router.post('/:serviceId/migration', sanitizeInput, async (req, res, next) => {
 
 /**
  * DELETE /register/services
- * Delete all services (FOR TESTING ONLY)
+ * Delete all services
  */
-router.delete('/services', async (req, res) => {
+router.delete('/services', async (req, res, next) => {
   try {
     // Get all services
     const allServices = await registryService.getAllServicesFull();
@@ -123,7 +123,7 @@ router.delete('/services', async (req, res) => {
     });
   } catch (error) {
     logger.error('Failed to delete all services', { error: error.message });
-    res.status(500).json({ success: false, error: error.message });
+    next(error);
   }
 });
 

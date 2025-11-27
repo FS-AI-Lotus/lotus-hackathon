@@ -10,6 +10,4 @@ if command -v npm >/dev/null 2>&1; then
 fi
 
 # Start the coordinator (respects PORT from environment)
-npm run start
-
-
+exec npm run start

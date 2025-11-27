@@ -1,0 +1,21 @@
+{
+  "name": "lotus-hackathon",
+  "version": "1.0.0",
+  "description": "Lotus Hackathon Coordinator Service",
+  "main": "lotus-hackathon-main/services/coordinator/src/index.js",
+  "scripts": {
+    "start": "cd lotus-hackathon-main/services/coordinator && npm ci --omit=dev || npm install && node src/index.js",
+    "install": "cd lotus-hackathon-main/services/coordinator && npm install"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "keywords": [
+    "microservice",
+    "coordinator"
+  ],
+  "author": "",
+  "license": "ISC"
+}
+

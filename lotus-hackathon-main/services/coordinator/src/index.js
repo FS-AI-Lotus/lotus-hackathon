@@ -128,18 +128,21 @@ app.use(proxyRoutes);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// Initialize knowledge graph on startup
-const knowledgeGraphService = require('./services/knowledgeGraphService');
-setImmediate(async () => {
+// Initialize knowledge graph on startup (non-blocking, after server starts)
+// Use setTimeout to ensure server starts first
+setTimeout(async () => {
   try {
+    const knowledgeGraphService = require('./services/knowledgeGraphService');
     await knowledgeGraphService.rebuildGraph();
     logger.info('Knowledge graph initialized on startup');
   } catch (error) {
     logger.warn('Failed to initialize knowledge graph on startup', {
-      error: error.message
+      error: error.message,
+      stack: error.stack
     });
+    // Don't crash - this is non-critical
   }
-});
+}, 1000); // Wait 1 second after server starts
 
 // Start HTTP server
 // Use 0.0.0.0 for Railway/deployment, 127.0.0.1 for local development (avoids IPv6 issues)

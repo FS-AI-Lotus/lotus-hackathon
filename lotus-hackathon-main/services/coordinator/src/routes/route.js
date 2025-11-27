@@ -55,15 +55,20 @@ router.post('/', sanitizeInput, async (req, res, next) => {
     });
 
     // Attempt AI routing
+    // Note: routeRequest already handles fallback internally if AI routing fails
     let routingResult;
     try {
       routingResult = await aiRoutingService.routeRequest(routingData, routingConfig);
     } catch (error) {
-      // Fallback to rule-based routing if OpenAI fails
-      logger.warn('AI routing failed, using fallback', {
+      // If routing fails completely (e.g., no active services), return error
+      logger.error('Routing failed completely', {
         error: error.message
       });
-      routingResult = await aiRoutingService.fallbackRouting(userQuery);
+      return res.status(502).json({
+        success: false,
+        message: error.message || 'No active services available for routing',
+        query: userQuery
+      });
     }
 
     if (!routingResult.success) {
@@ -107,18 +112,42 @@ router.get('/', async (req, res, next) => {
     });
 
     // Attempt AI routing
+    // Note: routeRequest already handles fallback internally if AI routing fails
     let routingResult;
     try {
-      routingResult = await aiRoutingService.routeRequest(userQuery, {
+      // Create proper routing data structure for GET request
+      const routingData = {
+        type: 'query',
+        payload: {
+          query: userQuery,
+          metadata: {},
+          context: {
+            method: 'GET',
+            path: req.path
+          }
+        },
+        context: {
+          protocol: 'http',
+          source: 'route',
+          method: 'GET',
+          path: req.path
+        }
+      };
+      
+      routingResult = await aiRoutingService.routeRequest(routingData, {
         method: 'GET',
         path: req.path
       });
     } catch (error) {
-      // Fallback to rule-based routing
-      logger.warn('AI routing failed, using fallback', {
+      // If routing fails completely (e.g., no active services), return error
+      logger.error('Routing failed completely', {
         error: error.message
       });
-      routingResult = aiRoutingService.fallbackRouting(userQuery);
+      return res.status(502).json({
+        success: false,
+        message: error.message || 'No active services available for routing',
+        query: userQuery
+      });
     }
 
     if (!routingResult.success) {

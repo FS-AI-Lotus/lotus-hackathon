@@ -181,14 +181,20 @@ class ProxyService {
       };
 
       // Use AI routing to find target service
+      // Note: routeRequest already handles fallback internally if AI routing fails
       let routingResult;
       try {
         routingResult = await aiRoutingService.routeRequest(routingData, routingConfig);
       } catch (error) {
-        logger.warn('AI routing failed, using fallback', {
+        // If routing fails completely (e.g., no active services), return error
+        logger.error('Routing failed completely', {
           error: error.message
         });
-        routingResult = await aiRoutingService.fallbackRouting(query);
+        return res.status(502).json({
+          success: false,
+          message: error.message || 'No active services available for routing',
+          query: query
+        });
       }
 
       // Check if routing was successful

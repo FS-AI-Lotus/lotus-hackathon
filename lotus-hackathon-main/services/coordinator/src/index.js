@@ -21,13 +21,15 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
 
 // ============================================================
-// CRITICAL: Health check endpoint FIRST - before ANY middleware
+// CRITICAL: Health check endpoint FIRST - before ANYTHING else
 // Railway checks this within 1-2 seconds of container start
 // This MUST respond immediately with NO dependencies, NO middleware
+// Register BEFORE any other code runs
 // ============================================================
 app.get('/health', (req, res) => {
-  // Respond immediately - no async, no services, no middleware, no logging
+  // CRITICAL: Respond immediately - no async, no services, no middleware, no logging
   // Railway needs this to respond in < 1 second
+  // Use the simplest possible response - no try/catch, no error handling
   res.status(200).json({ 
     status: 'healthy', 
     service: 'coordinator',
@@ -35,8 +37,8 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Also register root endpoint for Railway
 app.get('/', (req, res) => {
-  // Root endpoint also responds immediately for Railway
   res.status(200).json({ 
     service: 'Coordinator', 
     status: 'running',
@@ -165,14 +167,38 @@ try {
     console.log(`✅ Server listening on http://${address.address}:${address.port}`);
     console.log(`✅ Health check ready: http://${address.address}:${address.port}/health`);
     console.log(`✅ Server ready for Railway health checks`);
+    console.log(`✅ PORT environment variable: ${process.env.PORT || 'not set (using default 3000)'}`);
+    console.log(`✅ HOST: ${HOST}`);
     
     logger.info('✅ Coordinator HTTP server is listening', {
       port: address.port,
       host: HOST,
       address: address.address,
       url: `http://${HOST}:${address.port}`,
-      environment: process.env.NODE_ENV || 'development'
+      environment: process.env.NODE_ENV || 'development',
+      railwayPort: process.env.PORT
     });
+    
+    // Test health endpoint immediately to ensure it works
+    setTimeout(() => {
+      const http = require('http');
+      const testReq = http.get(`http://${HOST}:${address.port}/health`, (testRes) => {
+        let data = '';
+        testRes.on('data', (chunk) => { data += chunk; });
+        testRes.on('end', () => {
+          console.log(`✅ Health endpoint test: ${testRes.statusCode} - ${data.substring(0, 100)}`);
+          logger.info('Health endpoint verified', { statusCode: testRes.statusCode });
+        });
+      });
+      testReq.on('error', (err) => {
+        console.error(`❌ Health endpoint test failed: ${err.message}`);
+        logger.error('Health endpoint test failed', { error: err.message });
+      });
+      testReq.setTimeout(1000, () => {
+        testReq.destroy();
+        console.error('❌ Health endpoint test timeout');
+      });
+    }, 100);
     
     // Load routes asynchronously after server starts (non-blocking)
     loadRoutesAsync();

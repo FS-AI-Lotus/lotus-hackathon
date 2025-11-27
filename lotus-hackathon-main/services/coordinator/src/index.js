@@ -20,67 +20,15 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
 
-// ============================================================
-// CRITICAL: Health check endpoint FIRST - before ANYTHING
-// Railway checks this within 1-2 seconds of container start
-// This MUST respond immediately with no dependencies
-// ============================================================
-app.get('/health', (req, res) => {
-  // Respond immediately - no async, no services, no dependencies
-  // Railway needs this to respond in < 1 second
-  res.status(200).json({ 
-    status: 'healthy', 
-    service: 'coordinator',
-    timestamp: new Date().toISOString()
-  });
-});
-
-app.get('/', (req, res) => {
-  // Root endpoint also responds immediately for Railway
-  res.status(200).json({ 
-    service: 'Coordinator', 
-    status: 'running',
-    health: '/health'
-  });
-});
-
-// ============================================================
-// Start server IMMEDIATELY - before loading any services
-// This ensures Railway health checks can succeed
-// ============================================================
-let server;
-try {
-  // Start server - callback fires when ready to accept connections
-  server = app.listen(PORT, HOST);
-  
-  // Log immediately when server starts listening
-  server.on('listening', () => {
-    const address = server.address();
-    console.log(`✅ Server listening on http://${address.address}:${address.port}`);
-    console.log(`✅ Health check ready: http://${address.address}:${address.port}/health`);
-    console.log(`✅ Server ready to accept connections`);
-  });
-  
-  server.on('error', (error) => {
-    console.error('❌ Server error:', error);
-    process.exit(1);
-  });
-  
-  // Also use callback for immediate feedback (may fire before 'listening' event)
-  server.once('listening', () => {
-    console.log(`✅ HTTP server started successfully`);
-  });
-} catch (error) {
-  console.error('❌ FATAL: Failed to start server:', error);
-  process.exit(1);
-}
-
-// Load basic middleware first (no service dependencies)
+// Load logger BEFORE starting server (for consistent logging)
 const logger = require('./utils/logger');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const requestLogger = require('./middleware/logger');
 
-// Middleware (after server starts)
+// ============================================================
+// Add middleware FIRST - before routes
+// This ensures consistent request handling
+// ============================================================
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestLogger);
@@ -127,11 +75,30 @@ app.use((req, res, next) => {
   next();
 });
 
-// CORS middleware (basic - can be enhanced by Team 4)
+// CORS middleware (configurable via environment variables)
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  // Allow specific origins from env var, or default to '*' (all origins)
+  // For production, set ALLOWED_ORIGINS to specific domains: "https://example.com,https://app.example.com"
+  const allowedOrigins = process.env.ALLOWED_ORIGINS 
+    ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+    : ['*']; // Default: allow all origins
+  
+  const origin = req.headers.origin;
+  
+  // If specific origins configured, check if request origin is allowed
+  if (allowedOrigins[0] !== '*' && origin) {
+    if (allowedOrigins.includes(origin)) {
+      res.header('Access-Control-Allow-Origin', origin);
+    }
+    // If origin not in allowed list, don't set header (browser will block)
+  } else {
+    // Allow all origins (default behavior)
+    res.header('Access-Control-Allow-Origin', '*');
+  }
+  
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
   
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
@@ -140,18 +107,42 @@ app.use((req, res, next) => {
   next();
 });
 
-// Register routes IMMEDIATELY - but load services lazily inside route handlers
-// This ensures routes are registered before server accepts connections
-// Track if routes are ready
+// ============================================================
+// CRITICAL: Health check endpoint - registered after middleware
+// Railway checks this within 1-2 seconds of container start
+// This MUST respond immediately with no dependencies
+// ============================================================
+app.get('/health', (req, res) => {
+  // Respond immediately - no async, no services, no dependencies
+  // Railway needs this to respond in < 1 second
+  res.status(200).json({ 
+    status: 'healthy', 
+    service: 'coordinator',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/', (req, res) => {
+  // Root endpoint also responds immediately for Railway
+  res.status(200).json({ 
+    service: 'Coordinator', 
+    status: 'running',
+    health: '/health'
+  });
+});
+
+// ============================================================
+// Register ALL routes BEFORE starting server
+// This ensures no race conditions with Railway health checks
+// ============================================================
 let routesReady = false;
 
-// Load routes synchronously (services will initialize when routes are required)
-// This is safe because routes are just Express routers - they don't execute until requests come in
 try {
+  // Load route modules (services will initialize when routes are required)
   const registerRoutes = require('./routes/register');
   const uiuxRoutes = require('./routes/uiux');
   const servicesRoutes = require('./routes/services');
-  const healthRoutes = require('./routes/health');
+  // NOTE: healthRoutes removed - using simple /health endpoint above instead
   const metricsRoutes = require('./routes/metrics');
   const routeRoutes = require('./routes/route');
   const knowledgeGraphRoutes = require('./routes/knowledgeGraph');
@@ -172,6 +163,54 @@ try {
   app.use('/schemas', schemasRoutes);
   app.use('/metrics', metricsRoutes);
   
+  // Additional endpoints
+  app.get('/info', (req, res) => {
+    res.status(200).json({
+      service: 'Coordinator Microservice',
+      version: '1.0.0',
+      status: 'running',
+      timestamp: new Date().toISOString(),
+      endpoints: {
+        register: 'POST /register, POST /register/:serviceId/migration',
+        route: 'GET /route, POST /route (AI-based routing)',
+        knowledgeGraph: 'GET /knowledge-graph, GET /graph, POST /knowledge-graph/rebuild',
+        uiux: 'GET /uiux, POST /uiux',
+        services: 'GET /services, GET /registry',
+        changelog: 'GET /changelog, GET /changelog/stats, GET /changelog/search, POST /changelog/cleanup',
+        schemas: 'GET /schemas, GET /schemas/:serviceId, POST /schemas/:serviceId/validate',
+        health: 'GET /health',
+        metrics: 'GET /metrics',
+        proxy: 'All other routes are proxied through AI routing'
+      }
+    });
+  });
+
+  app.get('/test', (req, res) => {
+    res.status(200).json({
+      success: true,
+      message: 'Server is responding',
+      timestamp: new Date().toISOString(),
+      port: PORT,
+      routesReady: routesReady
+    });
+  });
+
+  app.get('/ready', (req, res) => {
+    if (routesReady) {
+      res.status(200).json({
+        status: 'ready',
+        message: 'All routes and services are initialized',
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      res.status(503).json({
+        status: 'starting',
+        message: 'Routes are still being initialized',
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+  
   // Proxy route - MUST be after all specific routes
   // This catches all requests that don't match coordinator endpoints
   app.use(proxyRoutes);
@@ -187,118 +226,104 @@ try {
 } catch (error) {
   logger.error('Failed to load routes', { error: error.message, stack: error.stack });
   console.error('❌ Failed to load routes:', error);
-  // Don't exit - server is still running, health endpoint works
+  // Exit if routes fail - server shouldn't start without routes
+  process.exit(1);
 }
 
-// Log when server is ready (routes are already registered)
-server.once('listening', () => {
-  logger.info('All routes registered and services initialized');
-  console.log('✅ All API endpoints are now available');
-});
-
-// Detailed root endpoint (after middleware)
-app.get('/info', (req, res) => {
-  res.status(200).json({
-    service: 'Coordinator Microservice',
-    version: '1.0.0',
-    status: 'running',
-    timestamp: new Date().toISOString(),
-    endpoints: {
-      register: 'POST /register, POST /register/:serviceId/migration',
-      route: 'GET /route, POST /route (AI-based routing)',
-      knowledgeGraph: 'GET /knowledge-graph, GET /graph, POST /knowledge-graph/rebuild',
-      uiux: 'GET /uiux, POST /uiux',
-      services: 'GET /services, GET /registry',
-      changelog: 'GET /changelog, GET /changelog/stats, GET /changelog/search, POST /changelog/cleanup',
-      schemas: 'GET /schemas, GET /schemas/:serviceId, POST /schemas/:serviceId/validate',
-      health: 'GET /health',
-      metrics: 'GET /metrics',
-      proxy: 'All other routes are proxied through AI routing'
+// ============================================================
+// NOW start server - all routes are registered
+// This ensures Railway health checks work immediately
+// ============================================================
+let server;
+try {
+  // Start server - callback fires when ready to accept connections
+  server = app.listen(PORT, HOST);
+  
+  // Consolidated event listener (single handler for all listening events)
+  server.once('listening', () => {
+    const address = server.address();
+    console.log(`✅ Server listening on http://${address.address}:${address.port}`);
+    console.log(`✅ Health check ready: http://${address.address}:${address.port}/health`);
+    console.log(`✅ All API endpoints are now available`);
+    
+    logger.info('✅ Coordinator HTTP server is listening', {
+      port: PORT,
+      host: HOST,
+      address: address.address,
+      port: address.port,
+      url: `http://${HOST}:${PORT}`,
+      environment: process.env.NODE_ENV || 'development'
+    });
+    logger.info('All routes registered and services initialized');
+  });
+  
+  server.on('error', (error) => {
+    logger.error('❌ Server error occurred', {
+      error: error.message,
+      code: error.code,
+      port: PORT,
+      host: HOST
+    });
+    console.error('❌ Server error:', error);
+    
+    if (error.code === 'EADDRINUSE') {
+      logger.error(`Port ${PORT} is already in use. Try a different port: PORT=3002 npm start`);
+    } else if (error.code === 'EACCES') {
+      logger.error(`Permission denied on port ${PORT}. Try a different port: PORT=3002 npm start`);
     }
+    
+    process.exit(1);
   });
-});
-
-// Simple test endpoint - no dependencies, responds immediately
-app.get('/test', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Server is responding',
-    timestamp: new Date().toISOString(),
-    port: PORT,
-    routesReady: routesReady
+  
+  // Set request timeout to prevent hanging requests
+  server.timeout = 30000; // 30 seconds
+  server.keepAliveTimeout = 65000; // 65 seconds
+  server.headersTimeout = 66000; // 66 seconds
+  
+  // Replace startup error handlers with runtime handlers (after server is created)
+  // This allows graceful shutdown for runtime errors
+  process.removeListener('uncaughtException', startupErrorHandler);
+  process.removeListener('unhandledRejection', startupRejectionHandler);
+  
+} catch (error) {
+  logger.error('❌ FATAL: Failed to start server', {
+    error: error.message,
+    stack: error.stack
   });
-});
+  console.error('❌ FATAL: Failed to start server:', error);
+  process.exit(1);
+}
 
-// Readiness endpoint - check if all routes are loaded
-app.get('/ready', (req, res) => {
-  if (routesReady) {
-    res.status(200).json({
-      status: 'ready',
-      message: 'All routes and services are initialized',
-      timestamp: new Date().toISOString()
-    });
-  } else {
-    res.status(503).json({
-      status: 'starting',
-      message: 'Routes are still being initialized',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// Error handlers will be registered AFTER routes are loaded (inside listening event)
-
+// ============================================================
 // Initialize knowledge graph on startup (non-blocking, after server starts)
 // Use setTimeout to ensure server starts first
+// Added retry logic for better reliability
+// ============================================================
 setTimeout(async () => {
-  try {
-    const knowledgeGraphService = require('./services/knowledgeGraphService');
-    await knowledgeGraphService.rebuildGraph();
-    logger.info('Knowledge graph initialized on startup');
-  } catch (error) {
-    logger.warn('Failed to initialize knowledge graph on startup', {
-      error: error.message,
-      stack: error.stack
-    });
-    // Don't crash - this is non-critical
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      const knowledgeGraphService = require('./services/knowledgeGraphService');
+      await knowledgeGraphService.rebuildGraph();
+      logger.info('Knowledge graph initialized on startup');
+      break; // Success
+    } catch (error) {
+      retries--;
+      if (retries === 0) {
+        logger.error('Failed to initialize knowledge graph after retries', {
+          error: error.message,
+          stack: error.stack
+        });
+      } else {
+        logger.warn(`Knowledge graph init failed, retrying... (${retries} left)`, {
+          error: error.message
+        });
+        // Wait 2 seconds before retry
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
   }
 }, 1000); // Wait 1 second after server starts
-
-// Server already started above - now configure it
-server.on('listening', () => {
-  const address = server.address();
-  logger.info('✅ Coordinator HTTP server is listening', {
-    port: PORT,
-    host: HOST,
-    address: address.address,
-    port: address.port,
-    url: `http://${HOST}:${PORT}`,
-    environment: process.env.NODE_ENV || 'development'
-  });
-});
-
-// Handle server errors
-server.on('error', (err) => {
-  logger.error('❌ Server error occurred', {
-    error: err.message,
-    code: err.code,
-    port: PORT,
-    host: HOST
-  });
-  
-  if (err.code === 'EADDRINUSE') {
-    logger.error(`Port ${PORT} is already in use. Try a different port: PORT=3002 npm start`);
-  } else if (err.code === 'EACCES') {
-    logger.error(`Permission denied on port ${PORT}. Try a different port: PORT=3002 npm start`);
-  }
-  
-  process.exit(1);
-});
-
-// Set request timeout to prevent hanging requests
-server.timeout = 30000; // 30 seconds
-server.keepAliveTimeout = 65000; // 65 seconds
-server.headersTimeout = 66000; // 66 seconds
 
 // Start gRPC server (optional, won't crash if it fails)
 let grpcServer = null;
@@ -362,10 +387,6 @@ const gracefulShutdown = (signal) => {
     }
   });
 };
-
-// Replace startup error handlers with runtime handlers (after server is created)
-process.removeListener('uncaughtException', startupErrorHandler);
-process.removeListener('unhandledRejection', startupRejectionHandler);
 
 // Handle unhandled promise rejections (after server is created)
 process.on('unhandledRejection', (reason, promise) => {

@@ -88,6 +88,16 @@ These variables configure UI/UX features:
 
 ---
 
+## 🌐 CORS Configuration (Optional)
+
+These variables configure CORS (Cross-Origin Resource Sharing):
+
+| Variable | Default | Description | Example | Notes |
+|----------|---------|-------------|---------|-------|
+| `ALLOWED_ORIGINS` | `*` (all origins) | Comma-separated list of allowed origins | `https://app.example.com,https://admin.example.com` | Leave unset to allow all origins (development) |
+
+---
+
 ## 📝 Quick Setup Guide
 
 ### Minimal Setup (Required Only)

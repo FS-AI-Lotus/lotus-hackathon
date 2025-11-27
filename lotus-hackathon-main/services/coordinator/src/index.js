@@ -21,9 +21,22 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestLogger);
+
+// Request timeout middleware
+app.use((req, res, next) => {
+  req.setTimeout(25000, () => {
+    if (!res.headersSent) {
+      res.status(504).json({
+        success: false,
+        message: 'Request timeout'
+      });
+    }
+  });
+  next();
+});
 
 // Sanitize URL paths - remove trailing whitespace and newlines
 app.use((req, res, next) => {
@@ -132,6 +145,11 @@ const server = app.listen(PORT, HOST, (err) => {
     environment: process.env.NODE_ENV || 'development'
   });
 });
+
+// Set request timeout to prevent hanging requests
+server.timeout = 30000; // 30 seconds
+server.keepAliveTimeout = 65000; // 65 seconds
+server.headersTimeout = 66000; // 66 seconds
 
 // Handle server errors
 server.on('error', (err) => {

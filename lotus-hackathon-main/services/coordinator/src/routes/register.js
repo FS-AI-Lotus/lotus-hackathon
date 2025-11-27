@@ -13,6 +13,12 @@ router.post('/', sanitizeInput, validateRegistration, async (req, res, next) => 
   try {
     const { serviceName, version, endpoint, healthCheck, migrationFile, description, metadata } = req.body;
 
+    logger.info('Registration request received', {
+      serviceName,
+      version,
+      endpoint
+    });
+
     // Attempt to register the service
     const result = await registryService.registerService({
       serviceName,
@@ -25,30 +31,48 @@ router.post('/', sanitizeInput, validateRegistration, async (req, res, next) => 
     });
 
     // Update metrics
-    metricsService.incrementRegistrations();
-    const totalServices = await registryService.getTotalServices();
-    metricsService.updateRegisteredServices(totalServices);
+    try {
+      metricsService.incrementRegistrations();
+      const totalServices = await registryService.getTotalServices();
+      metricsService.updateRegisteredServices(totalServices);
+    } catch (metricsError) {
+      // Don't fail registration if metrics fail
+      logger.warn('Failed to update metrics', { error: metricsError.message });
+    }
 
     logger.info('Service registration successful', {
       serviceId: result.serviceId,
       serviceName
     });
 
-    res.status(201).json({
-      success: true,
-      message: 'Service registered successfully',
-      serviceId: result.serviceId
-    });
+    // Ensure response is sent
+    if (!res.headersSent) {
+      res.status(201).json({
+        success: true,
+        message: 'Service registered successfully',
+        serviceId: result.serviceId
+      });
+    }
   } catch (error) {
     // Update failed registration metrics
-    metricsService.incrementFailedRegistrations();
+    try {
+      metricsService.incrementFailedRegistrations();
+    } catch (metricsError) {
+      logger.warn('Failed to update failed metrics', { error: metricsError.message });
+    }
 
     logger.error('Service registration failed', {
       error: error.message,
+      stack: error.stack,
       body: req.body
     });
 
-    next(error);
+    // Ensure error response is sent
+    if (!res.headersSent) {
+      next(error);
+    } else {
+      logger.error('Response already sent, cannot send error response');
+    }
   }
 });
 

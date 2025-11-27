@@ -40,14 +40,26 @@ app.use((req, res, next) => {
     return next();
   }
   
-  req.setTimeout(25000, () => {
+  // Set timeout on response (req.setTimeout is deprecated and unreliable)
+  const timeout = setTimeout(() => {
     if (!res.headersSent) {
       res.status(504).json({
         success: false,
         message: 'Request timeout'
       });
+      res.end();
     }
+  }, 25000); // 25 seconds
+  
+  // Clear timeout when response finishes
+  res.on('finish', () => {
+    clearTimeout(timeout);
   });
+  
+  res.on('close', () => {
+    clearTimeout(timeout);
+  });
+  
   next();
 });
 
@@ -89,16 +101,18 @@ app.use((req, res, next) => {
   if (allowedOrigins[0] !== '*' && origin) {
     if (allowedOrigins.includes(origin)) {
       res.header('Access-Control-Allow-Origin', origin);
+      res.header('Access-Control-Allow-Credentials', 'true'); // ✅ OK with specific origin
     }
     // If origin not in allowed list, don't set header (browser will block)
   } else {
     // Allow all origins (default behavior)
     res.header('Access-Control-Allow-Origin', '*');
+    // ❌ Cannot set credentials when origin is '*' - browsers reject this
+    // Credentials only work with specific origins
   }
   
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
   
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
@@ -195,6 +209,9 @@ try {
     });
   });
 
+  // Set routesReady BEFORE registering /ready endpoint to avoid race condition
+  routesReady = true;
+  
   app.get('/ready', (req, res) => {
     if (routesReady) {
       res.status(200).json({
@@ -219,8 +236,6 @@ try {
   // This ensures 404/500 errors are handled correctly
   app.use(notFoundHandler);
   app.use(errorHandler);
-  
-  routesReady = true;
   logger.info('All routes registered (services will initialize on first request)');
   console.log('✅ All API endpoints registered');
 } catch (error) {
@@ -247,11 +262,10 @@ try {
     console.log(`✅ All API endpoints are now available`);
     
     logger.info('✅ Coordinator HTTP server is listening', {
-      port: PORT,
+      port: address.port,
       host: HOST,
       address: address.address,
-      port: address.port,
-      url: `http://${HOST}:${PORT}`,
+      url: `http://${HOST}:${address.port}`,
       environment: process.env.NODE_ENV || 'development'
     });
     logger.info('All routes registered and services initialized');
@@ -299,14 +313,17 @@ try {
 // Use setTimeout to ensure server starts first
 // Added retry logic for better reliability
 // ============================================================
-setTimeout(async () => {
+let knowledgeGraphInitTimeout = null;
+let knowledgeGraphRetryTimeout = null;
+
+const initKnowledgeGraph = async () => {
   let retries = 3;
   while (retries > 0) {
     try {
       const knowledgeGraphService = require('./services/knowledgeGraphService');
       await knowledgeGraphService.rebuildGraph();
       logger.info('Knowledge graph initialized on startup');
-      break; // Success
+      return; // Success
     } catch (error) {
       retries--;
       if (retries === 0) {
@@ -314,15 +331,22 @@ setTimeout(async () => {
           error: error.message,
           stack: error.stack
         });
+        return;
       } else {
         logger.warn(`Knowledge graph init failed, retrying... (${retries} left)`, {
           error: error.message
         });
         // Wait 2 seconds before retry
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => {
+          knowledgeGraphRetryTimeout = setTimeout(resolve, 2000);
+        });
       }
     }
   }
+};
+
+knowledgeGraphInitTimeout = setTimeout(() => {
+  initKnowledgeGraph();
 }, 1000); // Wait 1 second after server starts
 
 // Start gRPC server (optional, won't crash if it fails)
@@ -362,8 +386,15 @@ if (grpcEnabled) {
 const gracefulShutdown = (signal) => {
   logger.info(`${signal} signal received: shutting down gracefully`);
   
+  // Set timeout for graceful shutdown (prevent hanging)
+  const shutdownTimeout = setTimeout(() => {
+    logger.error('Graceful shutdown timeout, forcing exit');
+    process.exit(1);
+  }, 10000); // 10 seconds max
+  
   // Close HTTP server
   server.close(() => {
+    clearTimeout(shutdownTimeout);
     logger.info('HTTP server closed');
     
     // Close gRPC server if running
@@ -380,12 +411,19 @@ const gracefulShutdown = (signal) => {
         const { closeMicroserviceClients } = require('./grpc/client');
         closeMicroserviceClients();
         
+        clearTimeout(shutdownTimeout);
         process.exit(0);
       });
     } else {
+      clearTimeout(shutdownTimeout);
       process.exit(0);
     }
   });
+  
+  // Force close idle connections
+  if (server.closeIdleConnections) {
+    server.closeIdleConnections();
+  }
 };
 
 // Handle unhandled promise rejections (after server is created)
@@ -409,8 +447,19 @@ process.on('uncaughtException', (error) => {
   }
 });
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => {
+  // Clear knowledge graph timeouts on shutdown
+  if (knowledgeGraphInitTimeout) clearTimeout(knowledgeGraphInitTimeout);
+  if (knowledgeGraphRetryTimeout) clearTimeout(knowledgeGraphRetryTimeout);
+  gracefulShutdown('SIGTERM');
+});
+
+process.on('SIGINT', () => {
+  // Clear knowledge graph timeouts on shutdown
+  if (knowledgeGraphInitTimeout) clearTimeout(knowledgeGraphInitTimeout);
+  if (knowledgeGraphRetryTimeout) clearTimeout(knowledgeGraphRetryTimeout);
+  gracefulShutdown('SIGINT');
+});
 
 module.exports = app;
 

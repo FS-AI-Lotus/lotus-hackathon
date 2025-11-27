@@ -190,6 +190,8 @@ try {
     console.log(`✅ Server ready for Railway health checks`);
     console.log(`✅ PORT environment variable: ${process.env.PORT || 'not set (using default 3000)'}`);
     console.log(`✅ HOST: ${HOST}`);
+    console.log(`✅ Server address: ${JSON.stringify(address)}`);
+    console.log(`✅ Railway should route traffic to port: ${address.port}`);
     
     logger.info('✅ Coordinator HTTP server is listening', {
       port: address.port,
@@ -197,7 +199,16 @@ try {
       address: address.address,
       url: `http://${HOST}:${address.port}`,
       environment: process.env.NODE_ENV || 'development',
-      railwayPort: process.env.PORT
+      railwayPort: process.env.PORT,
+      serverAddress: address
+    });
+    
+    // Verify server is actually accepting connections
+    server.on('connection', (socket) => {
+      logger.debug('New connection received', { 
+        remoteAddress: socket.remoteAddress,
+        remotePort: socket.remotePort 
+      });
     });
     
     // Test health endpoint immediately to ensure it works
@@ -223,6 +234,11 @@ try {
     
     // Load routes asynchronously after server starts (non-blocking)
     loadRoutesAsync();
+  });
+  
+  // Log when server is actually ready to accept connections
+  server.on('ready', () => {
+    console.log('✅ Server is ready to accept connections');
   });
   
   server.on('error', (error) => {

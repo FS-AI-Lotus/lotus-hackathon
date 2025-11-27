@@ -11,6 +11,24 @@ function getKnowledgeGraphService() {
 }
 
 /**
+ * Add timeout to a promise
+ * @param {Promise} promise - Promise to add timeout to
+ * @param {number} timeoutMs - Timeout in milliseconds
+ * @param {string} operation - Operation name for error message
+ * @returns {Promise}
+ */
+function withTimeout(promise, timeoutMs, operation) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`${operation} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    })
+  ]);
+}
+
+/**
  * Service Registry - Supabase-backed storage with in-memory fallback
  * Automatically uses Supabase if configured, otherwise falls back to in-memory
  */
@@ -81,37 +99,72 @@ class RegistryService {
 
       // Store in Supabase or fallback to memory
       if (this.useSupabase) {
-        const { data, error } = await supabase
-          .from('registered_services')
-          .insert([serviceEntry])
-          .select()
-          .single();
+        try {
+          const { data, error } = await withTimeout(
+            supabase
+              .from('registered_services')
+              .insert([serviceEntry])
+              .select()
+              .single(),
+            15000, // 15 second timeout
+            'registerService insert'
+          );
 
-        if (error) {
-          logger.error('Supabase insert failed', { error: error.message });
-          throw new Error(`Failed to register service: ${error.message}`);
-        }
+          if (error) {
+            logger.error('Supabase insert failed', { error: error.message });
+            throw new Error(`Failed to register service: ${error.message}`);
+          }
 
-        logger.info('Service registered successfully in Supabase', {
-          serviceId,
-          serviceName,
-          version,
-          endpoint
-        });
-
-        // Rebuild knowledge graph after registration (async, non-blocking)
-        getKnowledgeGraphService().rebuildGraph().catch(error => {
-          logger.error('Failed to rebuild knowledge graph after registration', {
-            error: error.message,
-            stack: error.stack
+          logger.info('Service registered successfully in Supabase', {
+            serviceId,
+            serviceName,
+            version,
+            endpoint
           });
-        });
 
-        return {
-          success: true,
-          serviceId,
-          service: this._mapSupabaseToService(data)
-        };
+          // Rebuild knowledge graph after registration (async, non-blocking)
+          getKnowledgeGraphService().rebuildGraph().catch(error => {
+            logger.error('Failed to rebuild knowledge graph after registration', {
+              error: error.message,
+              stack: error.stack
+            });
+          });
+
+          return {
+            success: true,
+            serviceId,
+            service: this._mapSupabaseToService(data)
+          };
+        } catch (timeoutError) {
+          logger.error('Supabase insert timeout, falling back to in-memory storage', {
+            error: timeoutError.message,
+            serviceName
+          });
+          // Fallback to in-memory storage if Supabase times out
+          const service = {
+            id: serviceId,
+            serviceName: serviceEntry.service_name,
+            version: serviceEntry.version,
+            endpoint: serviceEntry.endpoint,
+            healthCheck: serviceEntry.health_check,
+            migrationFile: serviceEntry.migration_file,
+            registeredAt: serviceEntry.registered_at,
+            lastHealthCheck: serviceEntry.last_health_check,
+            status: serviceEntry.status
+          };
+          this.services.set(serviceId, service);
+          
+          logger.warn('Service registered in memory due to Supabase timeout', {
+            serviceId,
+            serviceName
+          });
+          
+          return {
+            success: true,
+            serviceId,
+            service
+          };
+        }
       } else {
         // Fallback to in-memory storage
         const inMemoryEntry = {
@@ -166,17 +219,29 @@ class RegistryService {
    */
   async getAllServicesFull() {
     if (this.useSupabase) {
-      const { data, error } = await supabase
-        .from('registered_services')
-        .select('*')
-        .order('registered_at', { ascending: false });
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from('registered_services')
+            .select('*')
+            .order('registered_at', { ascending: false }),
+          10000, // 10 second timeout
+          'getAllServicesFull'
+        );
 
-      if (error) {
-        logger.error('Failed to fetch services from Supabase', { error: error.message });
-        return [];
+        if (error) {
+          logger.error('Failed to fetch services from Supabase', { error: error.message });
+          return [];
+        }
+
+        return data.map(service => this._mapSupabaseToService(service));
+      } catch (timeoutError) {
+        logger.error('Supabase query timeout in getAllServicesFull, using in-memory', {
+          error: timeoutError.message
+        });
+        // Fallback to in-memory
+        return Array.from(this.services.values());
       }
-
-      return data.map(service => this._mapSupabaseToService(service));
     } else {
       // Fallback to in-memory
       return Array.from(this.services.values());
@@ -248,17 +313,35 @@ class RegistryService {
    */
   async getServiceByName(serviceName) {
     if (this.useSupabase) {
-      const { data, error } = await supabase
-        .from('registered_services')
-        .select('*')
-        .eq('service_name', serviceName)
-        .single();
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from('registered_services')
+            .select('*')
+            .eq('service_name', serviceName)
+            .single(),
+          10000, // 10 second timeout
+          'getServiceByName'
+        );
 
-      if (error || !data) {
+        if (error || !data) {
+          return null;
+        }
+
+        return this._mapSupabaseToService(data);
+      } catch (timeoutError) {
+        logger.error('Supabase query timeout in getServiceByName', {
+          error: timeoutError.message,
+          serviceName
+        });
+        // Fallback to in-memory check if Supabase times out
+        for (const service of this.services.values()) {
+          if (service.serviceName === serviceName) {
+            return service;
+          }
+        }
         return null;
       }
-
-      return this._mapSupabaseToService(data);
     } else {
       for (const service of this.services.values()) {
         if (service.serviceName === serviceName) {
@@ -329,16 +412,27 @@ class RegistryService {
    */
   async getTotalServices() {
     if (this.useSupabase) {
-      const { count, error } = await supabase
-        .from('registered_services')
-        .select('*', { count: 'exact', head: true });
+      try {
+        const { count, error } = await withTimeout(
+          supabase
+            .from('registered_services')
+            .select('*', { count: 'exact', head: true }),
+          5000, // 5 second timeout
+          'getTotalServices'
+        );
 
-      if (error) {
-        logger.error('Failed to count services in Supabase', { error: error.message });
-        return 0;
+        if (error) {
+          logger.error('Failed to count services in Supabase', { error: error.message });
+          return 0;
+        }
+
+        return count || 0;
+      } catch (timeoutError) {
+        logger.error('Supabase query timeout in getTotalServices, using in-memory', {
+          error: timeoutError.message
+        });
+        return this.services.size;
       }
-
-      return count || 0;
     } else {
       return this.services.size;
     }

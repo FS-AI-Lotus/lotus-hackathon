@@ -8,7 +8,7 @@
    - Added at project root for Railpack auto-detection
    - Contains Node.js project configuration
    - Includes `start` script that navigates to coordinator service
-   - Specifies Node.js 18+ requirement
+   - Specifies Node.js 20+ requirement
 
 2. **`start.sh`** (Updated) ✅
    - Added `exec` command for proper process handling
@@ -108,7 +108,7 @@ If issues persist:
 1. **Check Build Logs**: Look for any error messages during build/start
 2. **Verify Environment Variables**: Ensure all required vars are set
 3. **Check Port Configuration**: Railway sets `PORT` automatically, ensure your app uses it
-4. **Node Version**: Ensure Node.js 18+ is available (specified in package.json)
+4. **Node Version**: Ensure Node.js 20+ is available (specified in package.json)
 
 ## 📝 Notes
 

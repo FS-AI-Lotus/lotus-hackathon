@@ -17,7 +17,7 @@ A Node.js/Express-based microservice that acts as a central registry and configu
 
 ### Prerequisites
 
-- Node.js v18 or higher
+- Node.js v20 or higher
 - npm or yarn
 
 ### Installation

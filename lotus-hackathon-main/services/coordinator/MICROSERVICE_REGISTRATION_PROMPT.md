@@ -716,7 +716,7 @@ SERVICE_ENDPOINT=http://your-service:3000  # Internal service name
 ### Dockerfile (Only if needed):
 
 ```dockerfile
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 

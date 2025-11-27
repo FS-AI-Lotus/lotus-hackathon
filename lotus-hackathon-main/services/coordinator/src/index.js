@@ -14,11 +14,51 @@ process.on('unhandledRejection', startupRejectionHandler);
 
 require('dotenv').config();
 const express = require('express');
+
+// Create Express app IMMEDIATELY - before loading any services
+const app = express();
+const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
+
+// ============================================================
+// CRITICAL: Health check endpoint FIRST - before ANYTHING
+// Railway checks this within 1-2 seconds of container start
+// ============================================================
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'healthy', service: 'coordinator' });
+});
+
+app.get('/', (req, res) => {
+  res.status(200).json({ service: 'Coordinator', status: 'running' });
+});
+
+// ============================================================
+// Start server IMMEDIATELY - before loading any services
+// This ensures Railway health checks can succeed
+// ============================================================
+let server;
+try {
+  server = app.listen(PORT, HOST, () => {
+    const address = server.address();
+    console.log(`✅ Server listening on http://${address.address}:${address.port}`);
+    console.log(`✅ Health check ready: /health`);
+  });
+  
+  server.on('error', (error) => {
+    console.error('❌ Server error:', error);
+    process.exit(1);
+  });
+} catch (error) {
+  console.error('❌ FATAL: Failed to start server:', error);
+  process.exit(1);
+}
+
+// Now load services and routes (non-blocking, after server is listening)
 const logger = require('./utils/logger');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const requestLogger = require('./middleware/logger');
 
-// Import routes
+// Import routes (deferred - after server starts)
 const registerRoutes = require('./routes/register');
 const uiuxRoutes = require('./routes/uiux');
 const servicesRoutes = require('./routes/services');
@@ -30,31 +70,7 @@ const changelogRoutes = require('./routes/changelog');
 const schemasRoutes = require('./routes/schemas');
 const proxyRoutes = require('./routes/proxy');
 
-// Create Express app
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Health check endpoint FIRST - before ANYTHING else (for Railway)
-// This MUST respond immediately with zero dependencies or Railway will kill the container
-// Railway checks this within 1-2 seconds of container start
-app.get('/health', (req, res) => {
-  // Respond immediately - no checks, no async, no dependencies
-  res.status(200).json({
-    status: 'healthy',
-    service: 'coordinator'
-  });
-});
-
-// Root endpoint also responds immediately (Railway may check this too)
-app.get('/', (req, res) => {
-  res.status(200).json({
-    service: 'Coordinator Microservice',
-    version: '1.0.0',
-    status: 'running'
-  });
-});
-
-// Middleware
+// Middleware (after server starts)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestLogger);
@@ -186,74 +202,18 @@ setTimeout(async () => {
   }
 }, 1000); // Wait 1 second after server starts
 
-// Start HTTP server
-// Use 0.0.0.0 for Railway/deployment, 127.0.0.1 for local development (avoids IPv6 issues)
-const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
-
-// Log that we're about to start
-console.log('🚀 Starting HTTP server...');
-console.log(`   Port: ${PORT}`);
-console.log(`   Host: ${HOST}`);
-console.log(`   Node Env: ${process.env.NODE_ENV || 'development'}`);
-
-logger.info('Starting HTTP server', {
-  port: PORT,
-  host: HOST,
-  nodeEnv: process.env.NODE_ENV || 'development'
-});
-
-// Start server immediately - don't wait for anything
-let server;
-try {
-  // Start listening immediately - Railway will check health within 1-2 seconds
-  server = app.listen(PORT, HOST);
-  
-  // Log when server is actually listening (callback may fire after first request)
-  server.on('listening', () => {
-    const address = server.address();
-    console.log(`✅ Server is listening!`);
-    console.log(`   Address: http://${address.address}:${address.port}`);
-    console.log(`   Health: http://${address.address}:${address.port}/health`);
-    
-    logger.info(`✅ Coordinator HTTP server is listening`, {
-      port: PORT,
-      host: HOST,
-      address: address.address,
-      port: address.port,
-      url: `http://${HOST}:${PORT}`,
-      environment: process.env.NODE_ENV || 'development',
-      timestamp: new Date().toISOString()
-    });
-  });
-  
-  // Also use callback for immediate feedback
-  server.on('listening', () => {
-    const address = server.address();
-    console.log(`✅ Server started successfully!`);
-    console.log(`   Ready to accept connections immediately`);
-  });
-  
-  // Handle errors
-  server.on('error', (error) => {
-    console.error('❌ Server error:', error);
-    logger.error('Server error', {
-      error: error.message,
-      stack: error.stack,
-      port: PORT,
-      host: HOST
-    });
-    process.exit(1);
-  });
-} catch (error) {
-  console.error('❌ FATAL: Failed to start server:', error);
-  logger.error('FATAL: Failed to start server', {
-    error: error.message,
-    stack: error.stack,
+// Server already started above - now configure it
+server.on('listening', () => {
+  const address = server.address();
+  logger.info('✅ Coordinator HTTP server is listening', {
     port: PORT,
-    host: HOST
+    host: HOST,
+    address: address.address,
+    port: address.port,
+    url: `http://${HOST}:${PORT}`,
+    environment: process.env.NODE_ENV || 'development'
   });
-  process.exit(1);
-}
+});
 
 // Handle server errors
 server.on('error', (err) => {

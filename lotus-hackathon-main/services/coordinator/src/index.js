@@ -23,13 +23,25 @@ const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0
 // ============================================================
 // CRITICAL: Health check endpoint FIRST - before ANYTHING
 // Railway checks this within 1-2 seconds of container start
+// This MUST respond immediately with no dependencies
 // ============================================================
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'healthy', service: 'coordinator' });
+  // Respond immediately - no async, no services, no dependencies
+  // Railway needs this to respond in < 1 second
+  res.status(200).json({ 
+    status: 'healthy', 
+    service: 'coordinator',
+    timestamp: new Date().toISOString()
+  });
 });
 
 app.get('/', (req, res) => {
-  res.status(200).json({ service: 'Coordinator', status: 'running' });
+  // Root endpoint also responds immediately for Railway
+  res.status(200).json({ 
+    service: 'Coordinator', 
+    status: 'running',
+    health: '/health'
+  });
 });
 
 // ============================================================
@@ -38,15 +50,25 @@ app.get('/', (req, res) => {
 // ============================================================
 let server;
 try {
-  server = app.listen(PORT, HOST, () => {
+  // Start server - callback fires when ready to accept connections
+  server = app.listen(PORT, HOST);
+  
+  // Log immediately when server starts listening
+  server.on('listening', () => {
     const address = server.address();
     console.log(`✅ Server listening on http://${address.address}:${address.port}`);
-    console.log(`✅ Health check ready: /health`);
+    console.log(`✅ Health check ready: http://${address.address}:${address.port}/health`);
+    console.log(`✅ Server ready to accept connections`);
   });
   
   server.on('error', (error) => {
     console.error('❌ Server error:', error);
     process.exit(1);
+  });
+  
+  // Also use callback for immediate feedback (may fire before 'listening' event)
+  server.once('listening', () => {
+    console.log(`✅ HTTP server started successfully`);
   });
 } catch (error) {
   console.error('❌ FATAL: Failed to start server:', error);

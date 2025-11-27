@@ -20,14 +20,38 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
 
-// Load logger BEFORE starting server (for consistent logging)
+// ============================================================
+// CRITICAL: Health check endpoint FIRST - before ANY middleware
+// Railway checks this within 1-2 seconds of container start
+// This MUST respond immediately with NO dependencies, NO middleware
+// ============================================================
+app.get('/health', (req, res) => {
+  // Respond immediately - no async, no services, no middleware, no logging
+  // Railway needs this to respond in < 1 second
+  res.status(200).json({ 
+    status: 'healthy', 
+    service: 'coordinator',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/', (req, res) => {
+  // Root endpoint also responds immediately for Railway
+  res.status(200).json({ 
+    service: 'Coordinator', 
+    status: 'running',
+    health: '/health'
+  });
+});
+
+// Load logger AFTER health endpoint (for consistent logging)
 const logger = require('./utils/logger');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const requestLogger = require('./middleware/logger');
 
 // ============================================================
-// Add middleware FIRST - before routes
-// This ensures consistent request handling
+// Add middleware AFTER health endpoint
+// This ensures health endpoint responds immediately
 // ============================================================
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -121,29 +145,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ============================================================
-// CRITICAL: Health check endpoint - registered after middleware
-// Railway checks this within 1-2 seconds of container start
-// This MUST respond immediately with no dependencies
-// ============================================================
-app.get('/health', (req, res) => {
-  // Respond immediately - no async, no services, no dependencies
-  // Railway needs this to respond in < 1 second
-  res.status(200).json({ 
-    status: 'healthy', 
-    service: 'coordinator',
-    timestamp: new Date().toISOString()
-  });
-});
-
-app.get('/', (req, res) => {
-  // Root endpoint also responds immediately for Railway
-  res.status(200).json({ 
-    service: 'Coordinator', 
-    status: 'running',
-    health: '/health'
-  });
-});
+// Health endpoints already registered above (before middleware)
 
 // ============================================================
 // Register ALL routes BEFORE starting server

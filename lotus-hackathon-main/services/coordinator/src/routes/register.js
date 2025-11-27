@@ -11,7 +11,7 @@ const { validateRegistration, sanitizeInput } = require('../middleware/validatio
  */
 router.post('/', sanitizeInput, validateRegistration, async (req, res, next) => {
   try {
-    const { serviceName, version, endpoint, healthCheck, migrationFile } = req.body;
+    const { serviceName, version, endpoint, healthCheck, migrationFile, description, metadata } = req.body;
 
     // Attempt to register the service
     const result = await registryService.registerService({
@@ -19,7 +19,9 @@ router.post('/', sanitizeInput, validateRegistration, async (req, res, next) => 
       version,
       endpoint,
       healthCheck,
-      migrationFile
+      migrationFile,
+      description,
+      metadata
     });
 
     // Update metrics

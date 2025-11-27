@@ -208,6 +208,24 @@ const gracefulShutdown = (signal) => {
   });
 };
 
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection at:', { promise, reason });
+  // Don't exit in production, just log
+  if (process.env.NODE_ENV !== 'production') {
+    console.error('Unhandled Rejection:', reason);
+  }
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', { error: error.message, stack: error.stack });
+  // In production, we might want to exit, but for now just log
+  if (process.env.NODE_ENV === 'production') {
+    gracefulShutdown('uncaughtException');
+  }
+});
+
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 

@@ -1,3 +1,17 @@
+// Top-level error handling - catch any errors during module loading
+let startupErrorHandler = (error) => {
+  console.error('❌ UNCAUGHT EXCEPTION during startup:', error.message);
+  console.error('Stack:', error.stack);
+  process.exit(1);
+};
+process.on('uncaughtException', startupErrorHandler);
+
+let startupRejectionHandler = (reason, promise) => {
+  console.error('❌ UNHANDLED REJECTION during startup:', reason);
+  // Don't exit - log and continue
+};
+process.on('unhandledRejection', startupRejectionHandler);
+
 require('dotenv').config();
 const express = require('express');
 const logger = require('./utils/logger');
@@ -149,25 +163,45 @@ setTimeout(async () => {
 const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
 
 // Log that we're about to start
+console.log('🚀 Starting HTTP server...');
+console.log(`   Port: ${PORT}`);
+console.log(`   Host: ${HOST}`);
+console.log(`   Node Env: ${process.env.NODE_ENV || 'development'}`);
+
 logger.info('Starting HTTP server', {
   port: PORT,
   host: HOST,
   nodeEnv: process.env.NODE_ENV || 'development'
 });
 
-const server = app.listen(PORT, HOST, () => {
-  // Server started successfully
-  logger.info(`✅ Coordinator HTTP server started successfully`, {
-    port: PORT,
-    host: HOST,
-    url: `http://${HOST}:${PORT}`,
-    environment: process.env.NODE_ENV || 'development',
-    timestamp: new Date().toISOString()
+let server;
+try {
+  server = app.listen(PORT, HOST, () => {
+    // Server started successfully
+    const address = server.address();
+    console.log(`✅ Server started successfully!`);
+    console.log(`   Listening on http://${address.address}:${address.port}`);
+    
+    logger.info(`✅ Coordinator HTTP server started successfully`, {
+      port: PORT,
+      host: HOST,
+      address: address.address,
+      port: address.port,
+      url: `http://${HOST}:${PORT}`,
+      environment: process.env.NODE_ENV || 'development',
+      timestamp: new Date().toISOString()
+    });
   });
-  
-  // Log that server is ready to accept connections
-  console.log(`🚀 Server listening on http://${HOST}:${PORT}`);
-});
+} catch (error) {
+  console.error('❌ FATAL: Failed to start server:', error);
+  logger.error('FATAL: Failed to start server', {
+    error: error.message,
+    stack: error.stack,
+    port: PORT,
+    host: HOST
+  });
+  process.exit(1);
+}
 
 // Handle server errors
 server.on('error', (err) => {
@@ -277,21 +311,28 @@ const gracefulShutdown = (signal) => {
   });
 };
 
-// Handle unhandled promise rejections
+// Replace startup error handlers with runtime handlers (after server is created)
+process.removeListener('uncaughtException', startupErrorHandler);
+process.removeListener('unhandledRejection', startupRejectionHandler);
+
+// Handle unhandled promise rejections (after server is created)
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Rejection at:', { promise, reason });
-  // Don't exit in production, just log
+  logger.error('Unhandled Rejection:', { promise, reason });
+  // Don't exit - just log
   if (process.env.NODE_ENV !== 'production') {
     console.error('Unhandled Rejection:', reason);
   }
 });
 
-// Handle uncaught exceptions
+// Handle uncaught exceptions (after server is created)
 process.on('uncaughtException', (error) => {
   logger.error('Uncaught Exception:', { error: error.message, stack: error.stack });
-  // In production, we might want to exit, but for now just log
-  if (process.env.NODE_ENV === 'production') {
+  // Use graceful shutdown if server exists
+  if (server) {
     gracefulShutdown('uncaughtException');
+  } else {
+    console.error('Fatal error before server started:', error);
+    process.exit(1);
   }
 });
 

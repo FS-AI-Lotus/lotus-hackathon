@@ -88,12 +88,13 @@ app.use('/schemas', schemasRoutes);
 app.use('/health', healthRoutes);
 app.use('/metrics', metricsRoutes);
 
-// Root endpoint
+// Root endpoint - simple, no dependencies
 app.get('/', (req, res) => {
   res.json({
     service: 'Coordinator Microservice',
     version: '1.0.0',
     status: 'running',
+    timestamp: new Date().toISOString(),
     endpoints: {
       register: 'POST /register, POST /register/:serviceId/migration',
       route: 'GET /route, POST /route (AI-based routing)',
@@ -106,6 +107,16 @@ app.get('/', (req, res) => {
       metrics: 'GET /metrics',
       proxy: 'All other routes are proxied through AI routing'
     }
+  });
+});
+
+// Simple test endpoint - no dependencies, responds immediately
+app.get('/test', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Server is responding',
+    timestamp: new Date().toISOString(),
+    port: PORT
   });
 });
 
@@ -133,16 +144,53 @@ setImmediate(async () => {
 // Start HTTP server
 // Use 0.0.0.0 for Railway/deployment, 127.0.0.1 for local development (avoids IPv6 issues)
 const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
-const server = app.listen(PORT, HOST, (err) => {
-  if (err) {
-    logger.error('Failed to start server', { error: err.message, port: PORT, host: HOST });
-    process.exit(1);
-  }
-  logger.info(`Coordinator HTTP server started`, {
+
+// Log that we're about to start
+logger.info('Starting HTTP server', {
+  port: PORT,
+  host: HOST,
+  nodeEnv: process.env.NODE_ENV || 'development'
+});
+
+const server = app.listen(PORT, HOST, () => {
+  // Server started successfully
+  logger.info(`✅ Coordinator HTTP server started successfully`, {
     port: PORT,
     host: HOST,
     url: `http://${HOST}:${PORT}`,
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString()
+  });
+  
+  // Log that server is ready to accept connections
+  console.log(`🚀 Server listening on http://${HOST}:${PORT}`);
+});
+
+// Handle server errors
+server.on('error', (err) => {
+  logger.error('❌ Server error occurred', {
+    error: err.message,
+    code: err.code,
+    port: PORT,
+    host: HOST
+  });
+  
+  if (err.code === 'EADDRINUSE') {
+    logger.error(`Port ${PORT} is already in use. Try a different port: PORT=3002 npm start`);
+  } else if (err.code === 'EACCES') {
+    logger.error(`Permission denied on port ${PORT}. Try a different port: PORT=3002 npm start`);
+  }
+  
+  process.exit(1);
+});
+
+// Log when server is listening
+server.on('listening', () => {
+  const address = server.address();
+  logger.info('✅ Server is listening', {
+    address: address.address,
+    port: address.port,
+    family: address.family
   });
 });
 

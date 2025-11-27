@@ -6,57 +6,33 @@ const logger = require('../utils/logger');
 
 /**
  * GET /health
- * Health check endpoint
+ * Health check endpoint - responds immediately for Railway health checks
  */
-router.get('/', async (req, res, next) => {
-  try {
-    // Quick response first
-    const startTime = Date.now();
-    
-    // Try to get services with timeout
-    let registeredServices = 0;
+router.get('/', (req, res) => {
+  // Respond immediately - no async operations
+  // Railway health checks need fast responses (< 1 second)
+  const uptime = metricsService.getUptime();
+  
+  res.status(200).json({
+    status: 'healthy',
+    uptime,
+    timestamp: new Date().toISOString(),
+    service: 'coordinator'
+  });
+  
+  // Optionally get service count in background (non-blocking)
+  setImmediate(async () => {
     try {
-      registeredServices = await Promise.race([
+      const registeredServices = await Promise.race([
         registryService.getTotalServices(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
       ]);
+      logger.info('Health check - service count updated', { registeredServices });
     } catch (error) {
-      logger.warn('Failed to get service count in health check', { error: error.message });
-      registeredServices = -1; // Indicate error
+      // Silently fail - health check already responded
+      logger.debug('Health check - service count unavailable', { error: error.message });
     }
-    
-    const uptime = metricsService.getUptime();
-    const responseTime = Date.now() - startTime;
-
-    logger.info('Health check requested', {
-      uptime,
-      registeredServices,
-      responseTime: `${responseTime}ms`
-    });
-
-    res.status(200).json({
-      status: 'healthy',
-      uptime,
-      registeredServices: registeredServices >= 0 ? registeredServices : 'unavailable',
-      responseTime: `${responseTime}ms`,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Health check failed', {
-      error: error.message,
-      stack: error.stack
-    });
-    // Still return a response even on error
-    if (!res.headersSent) {
-      res.status(503).json({
-        status: 'unhealthy',
-        error: error.message,
-        timestamp: new Date().toISOString()
-      });
-    } else {
-      next(error);
-    }
-  }
+  });
 });
 
 module.exports = router;

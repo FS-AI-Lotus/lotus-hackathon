@@ -102,9 +102,10 @@ app.use('/schemas', schemasRoutes);
 app.use('/health', healthRoutes);
 app.use('/metrics', metricsRoutes);
 
-// Root endpoint - simple, no dependencies
+// Root endpoint - simple, no dependencies, responds immediately
+// Railway may use this for health checks
 app.get('/', (req, res) => {
-  res.json({
+  res.status(200).json({
     service: 'Coordinator Microservice',
     version: '1.0.0',
     status: 'running',

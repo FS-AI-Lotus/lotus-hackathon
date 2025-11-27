@@ -22,11 +22,12 @@ These variables are **required** for the service to function properly:
 
 These variables configure the server behavior. All have defaults:
 
-| Variable | Default | Description | Example |
-|----------|---------|-------------|---------|
-| `PORT` | `3000` | HTTP server port | `3000` | Railway/Railpack sets this automatically |
+| Variable | Default | Description | Example | Notes |
+|----------|---------|-------------|---------|-------|
+| `PORT` | `3000` | HTTP server port | `3000` | **Railway sets this automatically** - don't override unless needed |
 | `HOST` | `0.0.0.0` (prod) or `127.0.0.1` (dev) | Server host address | `0.0.0.0` | Usually don't need to set |
 | `NODE_ENV` | `development` | Environment mode | `production` | Affects logging and error handling |
+| `REGISTRATION_TIMEOUT` | `30000` | Registration request timeout (ms) | `30000` | Increase if Supabase is slow (30s default) |
 
 ---
 

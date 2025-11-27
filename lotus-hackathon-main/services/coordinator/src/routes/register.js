@@ -10,16 +10,23 @@ const { validateRegistration, sanitizeInput } = require('../middleware/validatio
  * Register a new microservice
  */
 router.post('/', sanitizeInput, validateRegistration, async (req, res, next) => {
-  // Set response timeout
-  req.setTimeout(20000, () => {
+  // Set response timeout (proper implementation)
+  // Increased from 20s to 30s to handle slow Supabase connections
+  const registrationTimeout = parseInt(process.env.REGISTRATION_TIMEOUT) || 30000; // 30 seconds default
+  const timeout = setTimeout(() => {
     if (!res.headersSent) {
       logger.error('Request timeout in register route');
-      return res.status(504).json({
+      res.status(504).json({
         success: false,
-        message: 'Request timeout'
+        message: 'Registration request timed out. This may be due to slow Supabase connection.',
+        hint: 'Check Supabase connection or try again. Service may still be registered in memory.'
       });
     }
-  });
+  }, registrationTimeout);
+
+  // Clear timeout when response finishes
+  res.on('finish', () => clearTimeout(timeout));
+  res.on('close', () => clearTimeout(timeout));
 
   try {
     const { serviceName, version, endpoint, healthCheck, migrationFile, description, metadata } = req.body;
@@ -52,10 +59,13 @@ router.post('/', sanitizeInput, validateRegistration, async (req, res, next) => 
       registrationPromise,
       new Promise((_, reject) => {
         setTimeout(() => {
-          reject(new Error('Registration process timed out after 20 seconds'));
-        }, 20000);
+          reject(new Error('Registration process timed out after 30 seconds. Supabase connection may be slow.'));
+        }, registrationTimeout);
       })
     ]);
+    
+    // Clear timeout on success
+    clearTimeout(timeout);
 
     // Update metrics
     try {
@@ -74,6 +84,7 @@ router.post('/', sanitizeInput, validateRegistration, async (req, res, next) => 
 
     // Ensure response is sent
     if (!res.headersSent) {
+      clearTimeout(timeout);
       res.status(201).json({
         success: true,
         message: 'Service registered successfully',
@@ -81,6 +92,8 @@ router.post('/', sanitizeInput, validateRegistration, async (req, res, next) => 
       });
     }
   } catch (error) {
+    // Clear timeout on error
+    clearTimeout(timeout);
     // Update failed registration metrics
     try {
       metricsService.incrementFailedRegistrations();

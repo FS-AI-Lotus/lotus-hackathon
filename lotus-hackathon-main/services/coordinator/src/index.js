@@ -176,6 +176,11 @@ server.once('listening', () => {
     // This catches all requests that don't match coordinator endpoints
     app.use(proxyRoutes);
     
+    // Error handlers MUST be registered AFTER all routes
+    // This ensures 404/500 errors are handled correctly
+    app.use(notFoundHandler);
+    app.use(errorHandler);
+    
     routesReady = true;
     logger.info('All routes registered and services initialized');
     console.log('✅ All API endpoints are now available');
@@ -236,9 +241,7 @@ app.get('/ready', (req, res) => {
   }
 });
 
-// Error handling (registered before routes, but routes will be added later)
-app.use(notFoundHandler);
-app.use(errorHandler);
+// Error handlers will be registered AFTER routes are loaded (inside listening event)
 
 // Initialize knowledge graph on startup (non-blocking, after server starts)
 // Use setTimeout to ensure server starts first

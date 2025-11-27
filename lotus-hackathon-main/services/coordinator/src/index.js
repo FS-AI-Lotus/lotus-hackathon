@@ -156,6 +156,7 @@ server.once('listening', () => {
   const proxyRoutes = require('./routes/proxy');
   
   // Register routes (services will initialize now, but server is already ready)
+  // IMPORTANT: Register before proxy route
   app.use('/register', registerRoutes);
   app.use('/uiux', uiuxRoutes);
   app.use('/services', servicesRoutes);
@@ -166,6 +167,10 @@ server.once('listening', () => {
   app.use('/changelog', changelogRoutes);
   app.use('/schemas', schemasRoutes);
   app.use('/metrics', metricsRoutes);
+  
+  // Proxy route - MUST be after all specific routes
+  // This catches all requests that don't match coordinator endpoints
+  app.use(proxyRoutes);
   
   logger.info('All routes registered and services initialized');
 });
@@ -202,11 +207,7 @@ app.get('/test', (req, res) => {
   });
 });
 
-// Proxy route - MUST be after all specific routes but before error handlers
-// This catches all requests that don't match coordinator endpoints
-app.use(proxyRoutes);
-
-// Error handling
+// Error handling (registered before routes, but routes will be added later)
 app.use(notFoundHandler);
 app.use(errorHandler);
 

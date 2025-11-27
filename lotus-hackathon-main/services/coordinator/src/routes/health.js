@@ -7,30 +7,34 @@ const logger = require('../utils/logger');
 /**
  * GET /health
  * Health check endpoint - responds immediately for Railway health checks
+ * MUST respond in < 100ms or Railway will kill the container
  */
 router.get('/', (req, res) => {
-  // Respond immediately - no async operations
-  // Railway health checks need fast responses (< 1 second)
-  const uptime = metricsService.getUptime();
-  
+  // Respond IMMEDIATELY - no dependencies, no async, no logging that could block
+  // This is critical for Railway health checks
   res.status(200).json({
     status: 'healthy',
-    uptime,
-    timestamp: new Date().toISOString(),
-    service: 'coordinator'
+    service: 'coordinator',
+    timestamp: new Date().toISOString()
   });
   
-  // Optionally get service count in background (non-blocking)
-  setImmediate(async () => {
+  // Everything else happens AFTER response is sent (non-blocking)
+  setImmediate(() => {
     try {
-      const registeredServices = await Promise.race([
+      const uptime = metricsService.getUptime();
+      logger.info('Health check', { uptime });
+      
+      // Optionally get service count in background
+      Promise.race([
         registryService.getTotalServices(),
         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
-      ]);
-      logger.info('Health check - service count updated', { registeredServices });
+      ]).then(registeredServices => {
+        logger.debug('Health check - service count', { registeredServices });
+      }).catch(() => {
+        // Silently fail
+      });
     } catch (error) {
       // Silently fail - health check already responded
-      logger.debug('Health check - service count unavailable', { error: error.message });
     }
   });
 });

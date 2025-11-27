@@ -39,8 +39,13 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestLogger);
 
-// Request timeout middleware
+// Request timeout middleware - but skip for health checks
 app.use((req, res, next) => {
+  // Health checks need to respond immediately, no timeout
+  if (req.path === '/health' || req.path === '/') {
+    return next();
+  }
+  
   req.setTimeout(25000, () => {
     if (!res.headersSent) {
       res.status(504).json({
@@ -89,6 +94,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Health endpoint FIRST - before any other routes for Railway health checks
+app.use('/health', healthRoutes);
+
 // Routes
 app.use('/register', registerRoutes);
 app.use('/uiux', uiuxRoutes);
@@ -99,7 +107,6 @@ app.use('/knowledge-graph', knowledgeGraphRoutes);
 app.use('/graph', knowledgeGraphRoutes); // Alias for /knowledge-graph
 app.use('/changelog', changelogRoutes);
 app.use('/schemas', schemasRoutes);
-app.use('/health', healthRoutes);
 app.use('/metrics', metricsRoutes);
 
 // Root endpoint - simple, no dependencies, responds immediately

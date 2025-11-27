@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Set workdir to the coordinator service
 WORKDIR /app/lotus-hackathon-main/services/coordinator

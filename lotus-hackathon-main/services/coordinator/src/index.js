@@ -140,55 +140,60 @@ app.use((req, res, next) => {
   next();
 });
 
-// Defer route loading until server is confirmed listening
-// This prevents services from initializing during startup
+// Register routes IMMEDIATELY - but load services lazily inside route handlers
+// This ensures routes are registered before server accepts connections
 // Track if routes are ready
 let routesReady = false;
 
+// Load routes synchronously (services will initialize when routes are required)
+// This is safe because routes are just Express routers - they don't execute until requests come in
+try {
+  const registerRoutes = require('./routes/register');
+  const uiuxRoutes = require('./routes/uiux');
+  const servicesRoutes = require('./routes/services');
+  const healthRoutes = require('./routes/health');
+  const metricsRoutes = require('./routes/metrics');
+  const routeRoutes = require('./routes/route');
+  const knowledgeGraphRoutes = require('./routes/knowledgeGraph');
+  const changelogRoutes = require('./routes/changelog');
+  const schemasRoutes = require('./routes/schemas');
+  const proxyRoutes = require('./routes/proxy');
+  
+  // Register routes BEFORE server starts listening
+  // IMPORTANT: Register before proxy route
+  app.use('/register', registerRoutes);
+  app.use('/uiux', uiuxRoutes);
+  app.use('/services', servicesRoutes);
+  app.use('/registry', servicesRoutes); // Alias for /services
+  app.use('/route', routeRoutes);
+  app.use('/knowledge-graph', knowledgeGraphRoutes);
+  app.use('/graph', knowledgeGraphRoutes); // Alias for /knowledge-graph
+  app.use('/changelog', changelogRoutes);
+  app.use('/schemas', schemasRoutes);
+  app.use('/metrics', metricsRoutes);
+  
+  // Proxy route - MUST be after all specific routes
+  // This catches all requests that don't match coordinator endpoints
+  app.use(proxyRoutes);
+  
+  // Error handlers MUST be registered AFTER all routes
+  // This ensures 404/500 errors are handled correctly
+  app.use(notFoundHandler);
+  app.use(errorHandler);
+  
+  routesReady = true;
+  logger.info('All routes registered (services will initialize on first request)');
+  console.log('✅ All API endpoints registered');
+} catch (error) {
+  logger.error('Failed to load routes', { error: error.message, stack: error.stack });
+  console.error('❌ Failed to load routes:', error);
+  // Don't exit - server is still running, health endpoint works
+}
+
+// Log when server is ready (routes are already registered)
 server.once('listening', () => {
-  try {
-    // Now load routes (they will require services, but server is already listening)
-    const registerRoutes = require('./routes/register');
-    const uiuxRoutes = require('./routes/uiux');
-    const servicesRoutes = require('./routes/services');
-    const healthRoutes = require('./routes/health');
-    const metricsRoutes = require('./routes/metrics');
-    const routeRoutes = require('./routes/route');
-    const knowledgeGraphRoutes = require('./routes/knowledgeGraph');
-    const changelogRoutes = require('./routes/changelog');
-    const schemasRoutes = require('./routes/schemas');
-    const proxyRoutes = require('./routes/proxy');
-    
-    // Register routes (services will initialize now, but server is already ready)
-    // IMPORTANT: Register before proxy route
-    app.use('/register', registerRoutes);
-    app.use('/uiux', uiuxRoutes);
-    app.use('/services', servicesRoutes);
-    app.use('/registry', servicesRoutes); // Alias for /services
-    app.use('/route', routeRoutes);
-    app.use('/knowledge-graph', knowledgeGraphRoutes);
-    app.use('/graph', knowledgeGraphRoutes); // Alias for /knowledge-graph
-    app.use('/changelog', changelogRoutes);
-    app.use('/schemas', schemasRoutes);
-    app.use('/metrics', metricsRoutes);
-    
-    // Proxy route - MUST be after all specific routes
-    // This catches all requests that don't match coordinator endpoints
-    app.use(proxyRoutes);
-    
-    // Error handlers MUST be registered AFTER all routes
-    // This ensures 404/500 errors are handled correctly
-    app.use(notFoundHandler);
-    app.use(errorHandler);
-    
-    routesReady = true;
-    logger.info('All routes registered and services initialized');
-    console.log('✅ All API endpoints are now available');
-  } catch (error) {
-    logger.error('Failed to load routes', { error: error.message, stack: error.stack });
-    console.error('❌ Failed to load routes:', error);
-    // Don't exit - server is still running, health endpoint works
-  }
+  logger.info('All routes registered and services initialized');
+  console.log('✅ All API endpoints are now available');
 });
 
 // Detailed root endpoint (after middleware)

@@ -1,7 +1,14 @@
 const { v4: uuidv4 } = require('uuid');
 const logger = require('../utils/logger');
 const supabase = require('../config/supabase');
-const knowledgeGraphService = require('./knowledgeGraphService');
+// Lazy load knowledgeGraphService to avoid circular dependency
+let knowledgeGraphService = null;
+function getKnowledgeGraphService() {
+  if (!knowledgeGraphService) {
+    knowledgeGraphService = require('./knowledgeGraphService');
+  }
+  return knowledgeGraphService;
+}
 
 /**
  * Service Registry - Supabase-backed storage with in-memory fallback
@@ -93,7 +100,7 @@ class RegistryService {
         });
 
         // Rebuild knowledge graph after registration (async, non-blocking)
-        knowledgeGraphService.rebuildGraph().catch(error => {
+        getKnowledgeGraphService().rebuildGraph().catch(error => {
           logger.error('Failed to rebuild knowledge graph after registration', {
             error: error.message,
             stack: error.stack
@@ -131,7 +138,7 @@ class RegistryService {
         });
 
         // Rebuild knowledge graph after registration (async, non-blocking)
-        knowledgeGraphService.rebuildGraph().catch(error => {
+        getKnowledgeGraphService().rebuildGraph().catch(error => {
           logger.error('Failed to rebuild knowledge graph after registration', {
             error: error.message,
             stack: error.stack
@@ -287,7 +294,7 @@ class RegistryService {
       // Rebuild knowledge graph after status update
       setImmediate(async () => {
         try {
-          await knowledgeGraphService.rebuildGraph();
+          await getKnowledgeGraphService().rebuildGraph();
         } catch (error) {
           logger.warn('Failed to rebuild knowledge graph after status update', {
             error: error.message
@@ -305,7 +312,7 @@ class RegistryService {
         // Rebuild knowledge graph after status update
         setImmediate(async () => {
           try {
-            await knowledgeGraphService.rebuildGraph();
+            await getKnowledgeGraphService().rebuildGraph();
           } catch (error) {
             logger.warn('Failed to rebuild knowledge graph after status update', {
               error: error.message
@@ -400,7 +407,7 @@ class RegistryService {
         // Trigger knowledge graph rebuild
         const knowledgeGraphService = require('./knowledgeGraphService');
         setImmediate(() => {
-          knowledgeGraphService.rebuildGraph().catch(error => {
+          getKnowledgeGraphService().rebuildGraph().catch(error => {
             logger.warn('Failed to rebuild knowledge graph after migration', {
               error: error.message
             });
@@ -431,7 +438,7 @@ class RegistryService {
         // Trigger knowledge graph rebuild
         const knowledgeGraphService = require('./knowledgeGraphService');
         setImmediate(() => {
-          knowledgeGraphService.rebuildGraph().catch(error => {
+          getKnowledgeGraphService().rebuildGraph().catch(error => {
             logger.warn('Failed to rebuild knowledge graph after migration', {
               error: error.message
             });

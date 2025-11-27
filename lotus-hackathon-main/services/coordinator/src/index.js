@@ -35,7 +35,17 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Health check endpoint FIRST - before any middleware (for Railway)
+// This MUST respond immediately or Railway will kill the container
 app.get('/health', (req, res) => {
+  // Check if server is ready (should always be true once listening)
+  if (!serverReady && server && !server.listening) {
+    return res.status(503).json({
+      status: 'starting',
+      service: 'coordinator',
+      timestamp: new Date().toISOString()
+    });
+  }
+  
   res.status(200).json({
     status: 'healthy',
     service: 'coordinator',
@@ -192,12 +202,17 @@ logger.info('Starting HTTP server', {
 });
 
 let server;
+let serverReady = false;
+
 try {
   server = app.listen(PORT, HOST, () => {
     // Server started successfully
     const address = server.address();
+    serverReady = true; // Mark server as ready
+    
     console.log(`✅ Server started successfully!`);
     console.log(`   Listening on http://${address.address}:${address.port}`);
+    console.log(`   Health check: http://${address.address}:${address.port}/health`);
     
     logger.info(`✅ Coordinator HTTP server started successfully`, {
       port: PORT,

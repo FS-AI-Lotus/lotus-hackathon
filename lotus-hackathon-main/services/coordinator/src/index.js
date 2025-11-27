@@ -142,37 +142,48 @@ app.use((req, res, next) => {
 
 // Defer route loading until server is confirmed listening
 // This prevents services from initializing during startup
+// Track if routes are ready
+let routesReady = false;
+
 server.once('listening', () => {
-  // Now load routes (they will require services, but server is already listening)
-  const registerRoutes = require('./routes/register');
-  const uiuxRoutes = require('./routes/uiux');
-  const servicesRoutes = require('./routes/services');
-  const healthRoutes = require('./routes/health');
-  const metricsRoutes = require('./routes/metrics');
-  const routeRoutes = require('./routes/route');
-  const knowledgeGraphRoutes = require('./routes/knowledgeGraph');
-  const changelogRoutes = require('./routes/changelog');
-  const schemasRoutes = require('./routes/schemas');
-  const proxyRoutes = require('./routes/proxy');
-  
-  // Register routes (services will initialize now, but server is already ready)
-  // IMPORTANT: Register before proxy route
-  app.use('/register', registerRoutes);
-  app.use('/uiux', uiuxRoutes);
-  app.use('/services', servicesRoutes);
-  app.use('/registry', servicesRoutes); // Alias for /services
-  app.use('/route', routeRoutes);
-  app.use('/knowledge-graph', knowledgeGraphRoutes);
-  app.use('/graph', knowledgeGraphRoutes); // Alias for /knowledge-graph
-  app.use('/changelog', changelogRoutes);
-  app.use('/schemas', schemasRoutes);
-  app.use('/metrics', metricsRoutes);
-  
-  // Proxy route - MUST be after all specific routes
-  // This catches all requests that don't match coordinator endpoints
-  app.use(proxyRoutes);
-  
-  logger.info('All routes registered and services initialized');
+  try {
+    // Now load routes (they will require services, but server is already listening)
+    const registerRoutes = require('./routes/register');
+    const uiuxRoutes = require('./routes/uiux');
+    const servicesRoutes = require('./routes/services');
+    const healthRoutes = require('./routes/health');
+    const metricsRoutes = require('./routes/metrics');
+    const routeRoutes = require('./routes/route');
+    const knowledgeGraphRoutes = require('./routes/knowledgeGraph');
+    const changelogRoutes = require('./routes/changelog');
+    const schemasRoutes = require('./routes/schemas');
+    const proxyRoutes = require('./routes/proxy');
+    
+    // Register routes (services will initialize now, but server is already ready)
+    // IMPORTANT: Register before proxy route
+    app.use('/register', registerRoutes);
+    app.use('/uiux', uiuxRoutes);
+    app.use('/services', servicesRoutes);
+    app.use('/registry', servicesRoutes); // Alias for /services
+    app.use('/route', routeRoutes);
+    app.use('/knowledge-graph', knowledgeGraphRoutes);
+    app.use('/graph', knowledgeGraphRoutes); // Alias for /knowledge-graph
+    app.use('/changelog', changelogRoutes);
+    app.use('/schemas', schemasRoutes);
+    app.use('/metrics', metricsRoutes);
+    
+    // Proxy route - MUST be after all specific routes
+    // This catches all requests that don't match coordinator endpoints
+    app.use(proxyRoutes);
+    
+    routesReady = true;
+    logger.info('All routes registered and services initialized');
+    console.log('✅ All API endpoints are now available');
+  } catch (error) {
+    logger.error('Failed to load routes', { error: error.message, stack: error.stack });
+    console.error('❌ Failed to load routes:', error);
+    // Don't exit - server is still running, health endpoint works
+  }
 });
 
 // Detailed root endpoint (after middleware)
@@ -203,8 +214,26 @@ app.get('/test', (req, res) => {
     success: true,
     message: 'Server is responding',
     timestamp: new Date().toISOString(),
-    port: PORT
+    port: PORT,
+    routesReady: routesReady
   });
+});
+
+// Readiness endpoint - check if all routes are loaded
+app.get('/ready', (req, res) => {
+  if (routesReady) {
+    res.status(200).json({
+      status: 'ready',
+      message: 'All routes and services are initialized',
+      timestamp: new Date().toISOString()
+    });
+  } else {
+    res.status(503).json({
+      status: 'starting',
+      message: 'Routes are still being initialized',
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // Error handling (registered before routes, but routes will be added later)

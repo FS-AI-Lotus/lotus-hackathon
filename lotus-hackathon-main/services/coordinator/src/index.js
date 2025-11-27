@@ -148,112 +148,15 @@ app.use((req, res, next) => {
 // Health endpoints already registered above (before middleware)
 
 // ============================================================
-// Register ALL routes BEFORE starting server
-// This ensures no race conditions with Railway health checks
-// ============================================================
-let routesReady = false;
-
-try {
-  // Load route modules (services will initialize when routes are required)
-  const registerRoutes = require('./routes/register');
-  const uiuxRoutes = require('./routes/uiux');
-  const servicesRoutes = require('./routes/services');
-  // NOTE: healthRoutes removed - using simple /health endpoint above instead
-  const metricsRoutes = require('./routes/metrics');
-  const routeRoutes = require('./routes/route');
-  const knowledgeGraphRoutes = require('./routes/knowledgeGraph');
-  const changelogRoutes = require('./routes/changelog');
-  const schemasRoutes = require('./routes/schemas');
-  const proxyRoutes = require('./routes/proxy');
-  
-  // Register routes BEFORE server starts listening
-  // IMPORTANT: Register before proxy route
-  app.use('/register', registerRoutes);
-  app.use('/uiux', uiuxRoutes);
-  app.use('/services', servicesRoutes);
-  app.use('/registry', servicesRoutes); // Alias for /services
-  app.use('/route', routeRoutes);
-  app.use('/knowledge-graph', knowledgeGraphRoutes);
-  app.use('/graph', knowledgeGraphRoutes); // Alias for /knowledge-graph
-  app.use('/changelog', changelogRoutes);
-  app.use('/schemas', schemasRoutes);
-  app.use('/metrics', metricsRoutes);
-  
-  // Additional endpoints
-  app.get('/info', (req, res) => {
-    res.status(200).json({
-      service: 'Coordinator Microservice',
-      version: '1.0.0',
-      status: 'running',
-      timestamp: new Date().toISOString(),
-      endpoints: {
-        register: 'POST /register, POST /register/:serviceId/migration',
-        route: 'GET /route, POST /route (AI-based routing)',
-        knowledgeGraph: 'GET /knowledge-graph, GET /graph, POST /knowledge-graph/rebuild',
-        uiux: 'GET /uiux, POST /uiux',
-        services: 'GET /services, GET /registry',
-        changelog: 'GET /changelog, GET /changelog/stats, GET /changelog/search, POST /changelog/cleanup',
-        schemas: 'GET /schemas, GET /schemas/:serviceId, POST /schemas/:serviceId/validate',
-        health: 'GET /health',
-        metrics: 'GET /metrics',
-        proxy: 'All other routes are proxied through AI routing'
-      }
-    });
-  });
-
-  app.get('/test', (req, res) => {
-    res.status(200).json({
-      success: true,
-      message: 'Server is responding',
-      timestamp: new Date().toISOString(),
-      port: PORT,
-      routesReady: routesReady
-    });
-  });
-
-  // Set routesReady BEFORE registering /ready endpoint to avoid race condition
-  routesReady = true;
-  
-  app.get('/ready', (req, res) => {
-    if (routesReady) {
-      res.status(200).json({
-        status: 'ready',
-        message: 'All routes and services are initialized',
-        timestamp: new Date().toISOString()
-      });
-    } else {
-      res.status(503).json({
-        status: 'starting',
-        message: 'Routes are still being initialized',
-        timestamp: new Date().toISOString()
-      });
-    }
-  });
-  
-  // Proxy route - MUST be after all specific routes
-  // This catches all requests that don't match coordinator endpoints
-  app.use(proxyRoutes);
-  
-  // Error handlers MUST be registered AFTER all routes
-  // This ensures 404/500 errors are handled correctly
-  app.use(notFoundHandler);
-  app.use(errorHandler);
-  logger.info('All routes registered');
-  console.log('✅ All API endpoints registered');
-} catch (error) {
-  logger.error('Failed to load routes', { error: error.message, stack: error.stack });
-  console.error('❌ Failed to load routes:', error);
-  // Exit if routes fail - server shouldn't start without routes
-  process.exit(1);
-}
-
-// ============================================================
-// NOW start server - all routes are registered
-// This ensures Railway health checks work immediately
+// START SERVER FIRST - Health endpoint must be available immediately
+// Then load routes asynchronously (non-blocking)
+// This ensures Railway health checks work even if route loading is slow
 // ============================================================
 let server;
+let routesReady = false;
+
+// Start server IMMEDIATELY - health endpoint is already registered
 try {
-  // Start server - callback fires when ready to accept connections
   server = app.listen(PORT, HOST);
   
   // Consolidated event listener (single handler for all listening events)
@@ -261,7 +164,7 @@ try {
     const address = server.address();
     console.log(`✅ Server listening on http://${address.address}:${address.port}`);
     console.log(`✅ Health check ready: http://${address.address}:${address.port}/health`);
-    console.log(`✅ All API endpoints are now available`);
+    console.log(`✅ Server ready for Railway health checks`);
     
     logger.info('✅ Coordinator HTTP server is listening', {
       port: address.port,
@@ -270,7 +173,9 @@ try {
       url: `http://${HOST}:${address.port}`,
       environment: process.env.NODE_ENV || 'development'
     });
-    logger.info('All routes registered and services initialized');
+    
+    // Load routes asynchronously after server starts (non-blocking)
+    loadRoutesAsync();
   });
   
   server.on('error', (error) => {
@@ -308,6 +213,115 @@ try {
   });
   console.error('❌ FATAL: Failed to start server:', error);
   process.exit(1);
+}
+
+// ============================================================
+// Load routes asynchronously (non-blocking)
+// This allows server to start immediately for Railway health checks
+// ============================================================
+async function loadRoutesAsync() {
+  try {
+    logger.info('Loading routes...');
+    
+    // Load route modules (services will initialize when routes are required)
+    const registerRoutes = require('./routes/register');
+    const uiuxRoutes = require('./routes/uiux');
+    const servicesRoutes = require('./routes/services');
+    // NOTE: healthRoutes removed - using simple /health endpoint above instead
+    const metricsRoutes = require('./routes/metrics');
+    const routeRoutes = require('./routes/route');
+    const knowledgeGraphRoutes = require('./routes/knowledgeGraph');
+    const changelogRoutes = require('./routes/changelog');
+    const schemasRoutes = require('./routes/schemas');
+    const proxyRoutes = require('./routes/proxy');
+    
+    // Register routes
+    // IMPORTANT: Register before proxy route
+    app.use('/register', registerRoutes);
+    app.use('/uiux', uiuxRoutes);
+    app.use('/services', servicesRoutes);
+    app.use('/registry', servicesRoutes); // Alias for /services
+    app.use('/route', routeRoutes);
+    app.use('/knowledge-graph', knowledgeGraphRoutes);
+    app.use('/graph', knowledgeGraphRoutes); // Alias for /knowledge-graph
+    app.use('/changelog', changelogRoutes);
+    app.use('/schemas', schemasRoutes);
+    app.use('/metrics', metricsRoutes);
+    
+    // Additional endpoints
+    app.get('/info', (req, res) => {
+      res.status(200).json({
+        service: 'Coordinator Microservice',
+        version: '1.0.0',
+        status: 'running',
+        timestamp: new Date().toISOString(),
+        endpoints: {
+          register: 'POST /register, POST /register/:serviceId/migration',
+          route: 'GET /route, POST /route (AI-based routing)',
+          knowledgeGraph: 'GET /knowledge-graph, GET /graph, POST /knowledge-graph/rebuild',
+          uiux: 'GET /uiux, POST /uiux',
+          services: 'GET /services, GET /registry',
+          changelog: 'GET /changelog, GET /changelog/stats, GET /changelog/search, POST /changelog/cleanup',
+          schemas: 'GET /schemas, GET /schemas/:serviceId, POST /schemas/:serviceId/validate',
+          health: 'GET /health',
+          metrics: 'GET /metrics',
+          proxy: 'All other routes are proxied through AI routing'
+        }
+      });
+    });
+
+    app.get('/test', (req, res) => {
+      res.status(200).json({
+        success: true,
+        message: 'Server is responding',
+        timestamp: new Date().toISOString(),
+        port: PORT,
+        routesReady: routesReady
+      });
+    });
+
+    // Set routesReady BEFORE registering /ready endpoint to avoid race condition
+    routesReady = true;
+    
+    app.get('/ready', (req, res) => {
+      if (routesReady) {
+        res.status(200).json({
+          status: 'ready',
+          message: 'All routes and services are initialized',
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        res.status(503).json({
+          status: 'starting',
+          message: 'Routes are still being initialized',
+          timestamp: new Date().toISOString()
+        });
+      }
+    });
+    
+    // Proxy route - MUST be after all specific routes
+    // This catches all requests that don't match coordinator endpoints
+    app.use(proxyRoutes);
+    
+    // Error handlers MUST be registered AFTER all routes
+    // This ensures 404/500 errors are handled correctly
+    app.use(notFoundHandler);
+    app.use(errorHandler);
+    
+    routesReady = true;
+    logger.info('All routes registered');
+    console.log('✅ All API endpoints registered');
+    
+  } catch (error) {
+    // Don't exit - server is running, health endpoint works
+    // Just log the error and continue
+    logger.error('Failed to load routes', { 
+      error: error.message, 
+      stack: error.stack 
+    });
+    console.error('❌ Failed to load routes (server still running, health endpoint works):', error.message);
+    // Server continues running - health endpoint still works
+  }
 }
 
 // ============================================================

@@ -25,26 +25,47 @@ const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0
 // Railway checks this within 1-2 seconds of container start
 // This MUST respond immediately with NO dependencies, NO middleware
 // Register BEFORE any other code runs
+// Support both GET and HEAD (Railway may use HEAD for health checks)
 // ============================================================
-app.get('/health', (req, res) => {
+const healthHandler = (req, res) => {
   // CRITICAL: Respond immediately - no async, no services, no middleware, no logging
   // Railway needs this to respond in < 1 second
-  // Use the simplest possible response - no try/catch, no error handling
-  res.status(200).json({ 
+  // Use the simplest possible response
+  res.status(200);
+  
+  // For HEAD requests, don't send body (just status)
+  if (req.method === 'HEAD') {
+    res.end();
+    return;
+  }
+  
+  // For GET requests, send JSON
+  res.json({ 
     status: 'healthy', 
     service: 'coordinator',
     timestamp: new Date().toISOString()
   });
-});
+};
 
-// Also register root endpoint for Railway
-app.get('/', (req, res) => {
-  res.status(200).json({ 
+app.get('/health', healthHandler);
+app.head('/health', healthHandler); // Railway may use HEAD for health checks
+
+// Also register root endpoint for Railway (GET and HEAD)
+const rootHandler = (req, res) => {
+  res.status(200);
+  if (req.method === 'HEAD') {
+    res.end();
+    return;
+  }
+  res.json({ 
     service: 'Coordinator', 
     status: 'running',
     health: '/health'
   });
-});
+};
+
+app.get('/', rootHandler);
+app.head('/', rootHandler);
 
 // Load logger AFTER health endpoint (for consistent logging)
 const logger = require('./utils/logger');

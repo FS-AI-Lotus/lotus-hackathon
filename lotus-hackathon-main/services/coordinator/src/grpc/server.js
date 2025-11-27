@@ -90,8 +90,8 @@ class GrpcServer {
               return;
             }
 
-            // Start the server
-            this.server.start();
+            // Server automatically starts after bindAsync completes
+            // No need to call start() - it's deprecated in @grpc/grpc-js
             
             logger.info('gRPC server started successfully', {
               port: port,

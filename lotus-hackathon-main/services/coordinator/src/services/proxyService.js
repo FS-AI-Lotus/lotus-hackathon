@@ -97,12 +97,24 @@ class ProxyService {
       // Forward the request
       let response;
       try {
+        // Check if fetch is available (Node.js 18+ has built-in fetch)
+        if (typeof fetch === 'undefined') {
+          throw new Error('fetch is not available. Node.js 18+ required or install node-fetch');
+        }
+        
         response = await fetch(fullUrl, fetchOptions);
         clearTimeout(timeoutId);
       } catch (error) {
         clearTimeout(timeoutId);
         if (error.name === 'AbortError') {
-          throw new Error(`Request timeout after ${this.timeout}ms`);
+          throw new Error(`Request timeout after ${this.timeout}ms to ${targetUrl}`);
+        }
+        // Provide more specific error messages
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+          throw new Error(`Cannot connect to microservice at ${targetUrl}. Service may be down or endpoint is incorrect.`);
+        }
+        if (error.code === 'ETIMEDOUT') {
+          throw new Error(`Connection timeout to ${targetUrl}. Service may be slow or unreachable.`);
         }
         throw error;
       }
@@ -188,12 +200,31 @@ class ProxyService {
       } catch (error) {
         // If routing fails completely (e.g., no active services), return error
         logger.error('Routing failed completely', {
-          error: error.message
+          error: error.message,
+          path: req.path,
+          method: req.method
         });
+        
+        // Get service count for better diagnostics
+        const allServices = await registryService.getAllServices();
+        const activeServices = allServices.filter(s => s.status === 'active');
+        
         return res.status(502).json({
           success: false,
           message: error.message || 'No active services available for routing',
-          query: query
+          query: query,
+          diagnostics: {
+            totalServices: allServices.length,
+            activeServices: activeServices.length,
+            allServices: allServices.map(s => ({
+              name: s.serviceName,
+              status: s.status,
+              endpoint: s.endpoint
+            }))
+          },
+          hint: activeServices.length === 0 
+            ? 'No active services registered. Register a service first using POST /register'
+            : 'Check service endpoints and ensure they are reachable'
         });
       }
 
@@ -253,13 +284,37 @@ class ProxyService {
         error: error.message,
         stack: error.stack,
         method: req.method,
-        path: req.path
+        path: req.path,
+        errorCode: error.code,
+        errorName: error.name
       });
+
+      // Provide more helpful error messages
+      let errorMessage = 'Failed to proxy request to microservice';
+      let diagnostics = {};
+      
+      if (error.message.includes('No active services')) {
+        errorMessage = 'No active services available for routing';
+        const allServices = await registryService.getAllServices().catch(() => []);
+        diagnostics = {
+          totalServices: allServices.length,
+          activeServices: allServices.filter(s => s.status === 'active').length
+        };
+      } else if (error.message.includes('Cannot connect')) {
+        errorMessage = error.message;
+      } else if (error.message.includes('timeout')) {
+        errorMessage = error.message;
+      } else if (error.message.includes('fetch is not available')) {
+        errorMessage = 'fetch API not available. Requires Node.js 18+ or node-fetch package.';
+      }
 
       res.status(502).json({
         success: false,
-        message: 'Failed to proxy request to microservice',
-        error: error.message
+        message: errorMessage,
+        error: error.message,
+        ...(Object.keys(diagnostics).length > 0 && { diagnostics }),
+        path: req.path,
+        method: req.method
       });
     }
   }

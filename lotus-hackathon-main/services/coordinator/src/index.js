@@ -236,7 +236,7 @@ try {
   // This ensures 404/500 errors are handled correctly
   app.use(notFoundHandler);
   app.use(errorHandler);
-  logger.info('All routes registered (services will initialize on first request)');
+  logger.info('All routes registered');
   console.log('✅ All API endpoints registered');
 } catch (error) {
   logger.error('Failed to load routes', { error: error.message, stack: error.stack });

@@ -4,32 +4,29 @@ const path = require('path');
 // Create logger instance
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
-  format: winston.format.combine(
-    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    winston.format.errors({ stack: true }),
-    winston.format.splat(),
-    winston.format.json()
-  ),
   defaultMeta: { service: 'coordinator' },
   transports: [
-    // Write all logs to console
+    // Single console transport with appropriate format based on environment
     new winston.transports.Console({
       format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.printf(({ timestamp, level, message, ...meta }) => {
-          return `${timestamp} [${level}]: ${message} ${Object.keys(meta).length ? JSON.stringify(meta, null, 2) : ''}`;
-        })
+        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        winston.format.errors({ stack: true }),
+        winston.format.splat(),
+        // Use JSON format in production, pretty format in development
+        process.env.NODE_ENV === 'production'
+          ? winston.format.json() // JSON format for production (better for log aggregation)
+          : winston.format.combine(
+              winston.format.colorize(),
+              winston.format.printf(({ timestamp, level, message, service, ...meta }) => {
+                const serviceTag = service ? `[${service}]` : '';
+                const metaStr = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
+                return `${timestamp} ${serviceTag} [${level}]: ${message}${metaStr}`;
+              })
+            )
       )
     })
   ]
 });
-
-// If we're not in production, log to console with simpler format
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: winston.format.simple()
-  }));
-}
 
 module.exports = logger;
 

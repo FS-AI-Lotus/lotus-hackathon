@@ -14,7 +14,7 @@ router.post('/', sanitizeInput, validateRegistration, async (req, res, next) => 
   // - Supabase operations have their own timeout (15s) with in-memory fallback
   // - Express server has server-level timeout (30s) configured in index.js
   // - Removing route timeout allows Supabase fallback to work properly
-  
+
   try {
     const { serviceName, version, endpoint, healthCheck, migrationFile, description, metadata } = req.body;
 

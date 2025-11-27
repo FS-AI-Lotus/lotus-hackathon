@@ -10,17 +10,34 @@ const { validateRegistration, sanitizeInput } = require('../middleware/validatio
  * Register a new microservice
  */
 router.post('/', sanitizeInput, validateRegistration, async (req, res, next) => {
+  // Set response timeout
+  req.setTimeout(20000, () => {
+    if (!res.headersSent) {
+      logger.error('Request timeout in register route');
+      return res.status(504).json({
+        success: false,
+        message: 'Request timeout'
+      });
+    }
+  });
+
   try {
     const { serviceName, version, endpoint, healthCheck, migrationFile, description, metadata } = req.body;
 
     logger.info('Registration request received', {
       serviceName,
       version,
-      endpoint
+      endpoint,
+      timestamp: new Date().toISOString()
     });
 
-    // Attempt to register the service
-    const result = await registryService.registerService({
+    // Attempt to register the service with timeout protection
+    logger.info('Calling registryService.registerService', {
+      serviceName,
+      timestamp: new Date().toISOString()
+    });
+    
+    const registrationPromise = registryService.registerService({
       serviceName,
       version,
       endpoint,
@@ -29,6 +46,16 @@ router.post('/', sanitizeInput, validateRegistration, async (req, res, next) => 
       description,
       metadata
     });
+    
+    // Add overall timeout for the entire registration process
+    const result = await Promise.race([
+      registrationPromise,
+      new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Registration process timed out after 20 seconds'));
+        }, 20000);
+      })
+    ]);
 
     // Update metrics
     try {
@@ -64,12 +91,22 @@ router.post('/', sanitizeInput, validateRegistration, async (req, res, next) => 
     logger.error('Service registration failed', {
       error: error.message,
       stack: error.stack,
-      body: req.body
+      body: req.body,
+      timestamp: new Date().toISOString()
     });
 
-    // Ensure error response is sent
+    // Ensure error response is sent - don't use next() which might hang
     if (!res.headersSent) {
-      next(error);
+      const statusCode = error.status || 500;
+      const message = process.env.NODE_ENV === 'production' && statusCode === 500
+        ? 'Internal server error'
+        : error.message;
+      
+      res.status(statusCode).json({
+        success: false,
+        message: message,
+        ...(process.env.NODE_ENV !== 'production' && { stack: error.stack })
+      });
     } else {
       logger.error('Response already sent, cannot send error response');
     }

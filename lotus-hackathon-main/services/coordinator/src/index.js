@@ -75,22 +75,10 @@ try {
   process.exit(1);
 }
 
-// Now load services and routes (non-blocking, after server is listening)
+// Load basic middleware first (no service dependencies)
 const logger = require('./utils/logger');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const requestLogger = require('./middleware/logger');
-
-// Import routes (deferred - after server starts)
-const registerRoutes = require('./routes/register');
-const uiuxRoutes = require('./routes/uiux');
-const servicesRoutes = require('./routes/services');
-const healthRoutes = require('./routes/health');
-const metricsRoutes = require('./routes/metrics');
-const routeRoutes = require('./routes/route');
-const knowledgeGraphRoutes = require('./routes/knowledgeGraph');
-const changelogRoutes = require('./routes/changelog');
-const schemasRoutes = require('./routes/schemas');
-const proxyRoutes = require('./routes/proxy');
 
 // Middleware (after server starts)
 app.use(express.json({ limit: '10mb' }));
@@ -152,21 +140,35 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health routes (detailed health info) - but /health is already handled above
-// Keep this for backward compatibility but it won't be hit since /health is already defined
-// app.use('/health', healthRoutes); // Disabled - using inline /health above for Railway
-
-// Routes
-app.use('/register', registerRoutes);
-app.use('/uiux', uiuxRoutes);
-app.use('/services', servicesRoutes);
-app.use('/registry', servicesRoutes); // Alias for /services
-app.use('/route', routeRoutes);
-app.use('/knowledge-graph', knowledgeGraphRoutes);
-app.use('/graph', knowledgeGraphRoutes); // Alias for /knowledge-graph
-app.use('/changelog', changelogRoutes);
-app.use('/schemas', schemasRoutes);
-app.use('/metrics', metricsRoutes);
+// Defer route loading until server is confirmed listening
+// This prevents services from initializing during startup
+server.once('listening', () => {
+  // Now load routes (they will require services, but server is already listening)
+  const registerRoutes = require('./routes/register');
+  const uiuxRoutes = require('./routes/uiux');
+  const servicesRoutes = require('./routes/services');
+  const healthRoutes = require('./routes/health');
+  const metricsRoutes = require('./routes/metrics');
+  const routeRoutes = require('./routes/route');
+  const knowledgeGraphRoutes = require('./routes/knowledgeGraph');
+  const changelogRoutes = require('./routes/changelog');
+  const schemasRoutes = require('./routes/schemas');
+  const proxyRoutes = require('./routes/proxy');
+  
+  // Register routes (services will initialize now, but server is already ready)
+  app.use('/register', registerRoutes);
+  app.use('/uiux', uiuxRoutes);
+  app.use('/services', servicesRoutes);
+  app.use('/registry', servicesRoutes); // Alias for /services
+  app.use('/route', routeRoutes);
+  app.use('/knowledge-graph', knowledgeGraphRoutes);
+  app.use('/graph', knowledgeGraphRoutes); // Alias for /knowledge-graph
+  app.use('/changelog', changelogRoutes);
+  app.use('/schemas', schemasRoutes);
+  app.use('/metrics', metricsRoutes);
+  
+  logger.info('All routes registered and services initialized');
+});
 
 // Detailed root endpoint (after middleware)
 app.get('/info', (req, res) => {

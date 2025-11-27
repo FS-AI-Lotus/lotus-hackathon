@@ -34,22 +34,23 @@ const proxyRoutes = require('./routes/proxy');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Health check endpoint FIRST - before any middleware (for Railway)
-// This MUST respond immediately or Railway will kill the container
+// Health check endpoint FIRST - before ANYTHING else (for Railway)
+// This MUST respond immediately with zero dependencies or Railway will kill the container
+// Railway checks this within 1-2 seconds of container start
 app.get('/health', (req, res) => {
-  // Check if server is ready (should always be true once listening)
-  if (!serverReady && server && !server.listening) {
-    return res.status(503).json({
-      status: 'starting',
-      service: 'coordinator',
-      timestamp: new Date().toISOString()
-    });
-  }
-  
+  // Respond immediately - no checks, no async, no dependencies
   res.status(200).json({
     status: 'healthy',
-    service: 'coordinator',
-    timestamp: new Date().toISOString()
+    service: 'coordinator'
+  });
+});
+
+// Root endpoint also responds immediately (Railway may check this too)
+app.get('/', (req, res) => {
+  res.status(200).json({
+    service: 'Coordinator Microservice',
+    version: '1.0.0',
+    status: 'running'
   });
 });
 
@@ -113,8 +114,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health endpoint FIRST - before any other routes for Railway health checks
-app.use('/health', healthRoutes);
+// Health routes (detailed health info) - but /health is already handled above
+// Keep this for backward compatibility but it won't be hit since /health is already defined
+// app.use('/health', healthRoutes); // Disabled - using inline /health above for Railway
 
 // Routes
 app.use('/register', registerRoutes);

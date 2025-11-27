@@ -128,9 +128,8 @@ app.use('/changelog', changelogRoutes);
 app.use('/schemas', schemasRoutes);
 app.use('/metrics', metricsRoutes);
 
-// Root endpoint - simple, no dependencies, responds immediately
-// Railway may use this for health checks
-app.get('/', (req, res) => {
+// Detailed root endpoint (after middleware)
+app.get('/info', (req, res) => {
   res.status(200).json({
     service: 'Coordinator Microservice',
     version: '1.0.0',
@@ -202,17 +201,15 @@ logger.info('Starting HTTP server', {
 });
 
 let server;
-let serverReady = false;
-
 try {
   server = app.listen(PORT, HOST, () => {
     // Server started successfully
     const address = server.address();
-    serverReady = true; // Mark server as ready
     
     console.log(`✅ Server started successfully!`);
     console.log(`   Listening on http://${address.address}:${address.port}`);
-    console.log(`   Health check: http://${address.address}:${address.port}/health`);
+    console.log(`   Health: http://${address.address}:${address.port}/health`);
+    console.log(`   Ready to accept connections`);
     
     logger.info(`✅ Coordinator HTTP server started successfully`, {
       port: PORT,

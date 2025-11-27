@@ -202,18 +202,20 @@ logger.info('Starting HTTP server', {
   nodeEnv: process.env.NODE_ENV || 'development'
 });
 
+// Start server immediately - don't wait for anything
 let server;
 try {
-  server = app.listen(PORT, HOST, () => {
-    // Server started successfully
+  // Start listening immediately - Railway will check health within 1-2 seconds
+  server = app.listen(PORT, HOST);
+  
+  // Log when server is actually listening (callback may fire after first request)
+  server.on('listening', () => {
     const address = server.address();
-    
-    console.log(`✅ Server started successfully!`);
-    console.log(`   Listening on http://${address.address}:${address.port}`);
+    console.log(`✅ Server is listening!`);
+    console.log(`   Address: http://${address.address}:${address.port}`);
     console.log(`   Health: http://${address.address}:${address.port}/health`);
-    console.log(`   Ready to accept connections`);
     
-    logger.info(`✅ Coordinator HTTP server started successfully`, {
+    logger.info(`✅ Coordinator HTTP server is listening`, {
       port: PORT,
       host: HOST,
       address: address.address,
@@ -222,6 +224,25 @@ try {
       environment: process.env.NODE_ENV || 'development',
       timestamp: new Date().toISOString()
     });
+  });
+  
+  // Also use callback for immediate feedback
+  server.on('listening', () => {
+    const address = server.address();
+    console.log(`✅ Server started successfully!`);
+    console.log(`   Ready to accept connections immediately`);
+  });
+  
+  // Handle errors
+  server.on('error', (error) => {
+    console.error('❌ Server error:', error);
+    logger.error('Server error', {
+      error: error.message,
+      stack: error.stack,
+      port: PORT,
+      host: HOST
+    });
+    process.exit(1);
   });
 } catch (error) {
   console.error('❌ FATAL: Failed to start server:', error);

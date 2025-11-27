@@ -34,6 +34,15 @@ const proxyRoutes = require('./routes/proxy');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Health check endpoint FIRST - before any middleware (for Railway)
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    service: 'coordinator',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

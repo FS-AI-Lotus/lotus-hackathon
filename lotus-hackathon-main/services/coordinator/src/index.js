@@ -233,32 +233,10 @@ server.on('error', (err) => {
   process.exit(1);
 });
 
-// Log when server is listening
-server.on('listening', () => {
-  const address = server.address();
-  logger.info('✅ Server is listening', {
-    address: address.address,
-    port: address.port,
-    family: address.family
-  });
-});
-
 // Set request timeout to prevent hanging requests
 server.timeout = 30000; // 30 seconds
 server.keepAliveTimeout = 65000; // 65 seconds
 server.headersTimeout = 66000; // 66 seconds
-
-// Handle server errors
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    logger.error(`Port ${PORT} is already in use. Try a different port: PORT=3002 npm start`);
-  } else if (err.code === 'EACCES') {
-    logger.error(`Permission denied on port ${PORT}. Try a different port: PORT=3002 npm start`);
-  } else {
-    logger.error('Server error', { error: err.message, code: err.code });
-  }
-  process.exit(1);
-});
 
 // Start gRPC server (optional, won't crash if it fails)
 let grpcServer = null;

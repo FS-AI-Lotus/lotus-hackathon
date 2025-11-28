@@ -29,3 +29,33 @@ jobs:
       working-directory: lotus-hackathon-main/services/coordinator
       run: node --check src/index.js || true
 
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Railway CLI
+      run: npm install -g @railway/cli
+      
+    - name: Deploy to Railway
+      env:
+        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      run: |
+        if [ -z "$RAILWAY_TOKEN" ]; then
+          echo "⚠️  RAILWAY_TOKEN secret not found."
+          echo "Railway will auto-deploy if GitHub integration is enabled in Railway dashboard."
+          echo ""
+          echo "To enable GitHub Actions deployment:"
+          echo "1. Get your Railway token: railway login (then check ~/.railway/token.json)"
+          echo "2. Add RAILWAY_TOKEN as a GitHub secret (Settings → Secrets and variables → Actions)"
+          echo "3. Railway will automatically detect the project from the token"
+          exit 0
+        fi
+        
+        railway link --token $RAILWAY_TOKEN || true
+        railway up --token $RAILWAY_TOKEN
+

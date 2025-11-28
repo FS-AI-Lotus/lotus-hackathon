@@ -2,7 +2,6 @@
 
 /**
  * Analyze AI Routing Quality - Is the routing actually correct?
- * 555222555222565656
  */
 
 const { spawn } = require('child_process');

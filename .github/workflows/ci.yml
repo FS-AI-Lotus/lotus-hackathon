@@ -56,6 +56,6 @@ jobs:
           exit 0
         fi
         
-        railway link --token $RAILWAY_TOKEN || true
-        railway up --token $RAILWAY_TOKEN
+        railway link || true
+        railway up
 

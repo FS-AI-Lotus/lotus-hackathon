@@ -19,7 +19,9 @@ This guide will help you deploy your project to a new Railway project from scrat
 3. Go to **Tokens** tab
 4. Click **New Token**
 5. Give it a name (e.g., "GitHub Actions")
-6. Copy the token (you'll only see it once!)
+6. **IMPORTANT:** Make sure to select **"Full Access"** or at least **"Deploy"** permissions
+7. Copy the token (you'll only see it once!)
+8. **Verify the token format:** It should start with `railway_` and be a long string
 
 ### Get Project ID (Optional but Recommended)
 
@@ -112,6 +114,14 @@ Go to your Railway service → **Variables** tab and add:
 ### Issue: "RAILWAY_TOKEN not found"
 **Solution:** Make sure you added `RAILWAY_TOKEN` as a GitHub secret.
 
+### Issue: "Unauthorized. Please login with `railway login`"
+**Solution:** 
+- **Verify token format:** The token should start with `railway_` (e.g., `railway_abc123...`)
+- **Check token permissions:** Make sure the token has "Full Access" or "Deploy" permissions
+- **Regenerate token:** Delete the old token and create a new one
+- **Verify in GitHub:** Make sure the secret value in GitHub matches exactly (no extra spaces, newlines)
+- **Test token locally:** Run `RAILWAY_TOKEN=your_token railway whoami` to verify it works
+
 ### Issue: "Project not found"
 **Solution:** 
 - Verify your `RAILWAY_PROJECT_ID` is correct
@@ -128,6 +138,25 @@ Go to your Railway service → **Variables** tab and add:
 - Verify `PORT` environment variable is set (Railway sets this automatically)
 - Check that your service listens on `process.env.PORT || 3000`
 - Review Railway logs for startup errors
+
+### Issue: "Authentication failed" in GitHub Actions
+**Solution:**
+1. **Verify token is correct:**
+   - Go to Railway → Settings → Tokens
+   - Check if the token exists and hasn't expired
+   - Create a new token if needed
+2. **Check GitHub secret:**
+   - Go to GitHub → Settings → Secrets → Actions
+   - Verify `RAILWAY_TOKEN` value matches exactly (copy-paste, no spaces)
+3. **Token permissions:**
+   - Make sure the token has "Full Access" permissions
+   - Some tokens might be read-only
+4. **Test locally:**
+   ```bash
+   export RAILWAY_TOKEN="your_token_here"
+   railway whoami
+   ```
+   If this works locally but not in GitHub Actions, the issue is with the secret value
 
 ---
 

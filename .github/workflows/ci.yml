@@ -41,21 +41,30 @@ jobs:
     - name: Install Railway CLI
       run: npm install -g @railway/cli
       
-    - name: Deploy to Railway
+    - name: Deploy Coordinator to Railway
       env:
         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+      working-directory: lotus-hackathon-main/services/coordinator
       run: |
         if [ -z "$RAILWAY_TOKEN" ]; then
           echo "⚠️  RAILWAY_TOKEN secret not found."
           echo "Railway will auto-deploy if GitHub integration is enabled in Railway dashboard."
           echo ""
           echo "To enable GitHub Actions deployment:"
-          echo "1. Get your Railway token: railway login (then check ~/.railway/token.json)"
+          echo "1. Get your Railway token from Railway dashboard → Settings → Tokens"
           echo "2. Add RAILWAY_TOKEN as a GitHub secret (Settings → Secrets and variables → Actions)"
-          echo "3. Railway will automatically detect the project from the token"
+          echo "3. Add RAILWAY_PROJECT_ID (optional, if you want to specify project)"
           exit 0
         fi
         
-        railway link || true
+        echo "🔗 Linking to Railway project..."
+        if [ -n "$RAILWAY_PROJECT_ID" ]; then
+          railway link --project "$RAILWAY_PROJECT_ID" || railway link
+        else
+          railway link
+        fi
+        
+        echo "🚀 Deploying coordinator service..."
         railway up
 
